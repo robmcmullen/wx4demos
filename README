@@ -1,0 +1,5 @@
+Samples of code converting from wx3 to wx4
+
+* if code needs converting, the files will be tagged with wx3 and wx4 to indicate which version works.
+
+* if the code doesn't need converting, there will be no tag in the filename
