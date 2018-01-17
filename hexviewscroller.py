@@ -113,13 +113,11 @@ class HexGridWindow(wx.ScrolledWindow):
         self.Bind(wx.EVT_SCROLLWIN, self.on_scroll_window)
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
 
+        self.ShowScrollbars(wx.SHOW_SB_ALWAYS, wx.SHOW_SB_ALWAYS)
         self.main.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
-        self.main.scroller.parent = self
         self.top.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
-        self.top.scroller = DummyScroller()
         self.left.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
-        self.left.scroller = DummyScroller()
-       
+
     def on_left_up(self, event):
         print
         print "Title " + str(self)
@@ -142,6 +140,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.left.SetVirtualSize(wx.Size(left_width, height))
         self.corner.SetMinSize(left_width, top_height)
         #self.Layout()
+        wx.CallAfter(self.main.SetScrollManager, self)
 
     def HorizScroll(self, event, eventType):
         maxLineLen = self.main.CalcMaxLineLen()
@@ -193,92 +192,6 @@ class HexGridWindow(wx.ScrolledWindow):
         self.main.UpdateView()
         self.top.UpdateView()
         self.left.UpdateView()
-
-
-class HexGridHeader(wx.ScrolledCanvas):
-    use_x = 1
-    use_y = 1
-
-    def __init__(self, parent, width, height):
-        wx.ScrolledCanvas.__init__(self, parent, -1)
-        self.parent = parent
-        self.SetBackgroundColour(wx.RED)
-        self.SetSize(width, height)
-        self.SetVirtualSize(width, height)
-        self.Bind(wx.EVT_LEFT_DOWN, self.on_left_up)
-        self.Bind(wx.EVT_PAINT, self.on_paint)
-        self.Bind(wx.EVT_SIZE, self.on_size)
-
-    def on_size(self, event ):
-        print "Size " + str(self.GetSize())
-        print "VirtualSize " + str(self.GetVirtualSize())
-        size = self.GetSize()
-        vsize = self.GetVirtualSize()
-        if self.use_x and self.use_y:
-            # main window, no adjustment
-            pass
-        elif self.use_x:
-            # scrolls in X dir
-            self.SetVirtualSize(vsize.x, size.y)
-        else:
-            self.SetVirtualSize(size.x, vsize.y)
-
-        #self.Layout()
-
-    def on_paint(self, event):
-
-        dc = wx.PaintDC(self)
-        #self.parent.PrepareDC(dc)
-        size = self.GetVirtualSize()
-
-        s = "Size: %d x %d"%(size.x, size.y)
-        vbX, vbY = self.parent.GetViewStart()
-        posX, posY = self.parent.CalcUnscrolledPosition (0, 0)
-        vbX, vbY = vbX * self.use_x, vbY * self.use_y
-        posX, posY = posX * self.use_x, posY * self.use_y
-        # vbX, vbY = self.GetViewStart()
-        # posX, posY = self.CalcUnscrolledPosition (0, 0)
-        upd = wx.RegionIterator(self.GetUpdateRegion())  # get the update rect list
-        r = []
-        while upd.HaveRects():
-            rect = upd.GetRect()
-
-            # Repaint this rectangle
-            #PaintRectangle(rect, dc)
-            r.append("rect: %s" % str(rect))
-            upd.Next()
-        print s, (posX, posY), (vbX, vbY), " ".join(r)
-        dc.SetLogicalOrigin(posX, posY)
-
-        dc.SetFont(wx.NORMAL_FONT)
-        w, height = dc.GetTextExtent(s)
-        height += 3
-        dc.SetBrush(wx.WHITE_BRUSH)
-        dc.SetPen(wx.WHITE_PEN)
-        dc.DrawRectangle(0, 0, size.x, size.y)
-        dc.SetPen(wx.LIGHT_GREY_PEN)
-        dc.DrawLine(0, 0, size.x, size.y)
-        dc.DrawLine(0, size.y, size.x, 0)
-        dc.DrawText(s, (size.x-w)/2, (size.y-height*5)/2)
-     
-    def on_left_up(self, event):
-        print
-        print "Title " + str(self)
-        print "Position " + str(self.GetPosition())
-        print "ViewStart " + str(self.GetViewStart())
-        print "Size " + str(self.GetSize())
-        print "VirtualSize " + str(self.GetVirtualSize())
-
-
-class HexGridColHeader(HexGridHeader):
-    use_x = 1
-    use_y = 0
-
-
-class HexGridRowHeader(HexGridHeader):
-    use_x = 0
-    use_y = 1
-
 
 
 class MyApp(wx.App):
