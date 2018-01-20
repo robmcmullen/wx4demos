@@ -57,6 +57,10 @@ class AuxWindow(wx.ScrolledWindow):
         s = self.scroll_source
         self.DrawEditText(t, 0, line - s.sy, dc)
 
+    @property
+    def row_label_char_size(self):
+        return 4
+
     def DrawVert(self, odc=None):
         if not odc:
             odc = wx.ClientDC(self)
@@ -97,6 +101,8 @@ class HexGridWindow(wx.ScrolledWindow):
         wx.ScrolledWindow.__init__ (self, *args, **kwargs)
         self.SetAutoLayout(True)
 
+        self.row_label_border_width = 3
+
         self.update_dependents = self.update_dependents_null
         self.main = hexview.FixedFontDataWindow(self, 1000)
         self.top = AuxWindow(self, self.main, True, False)
@@ -110,6 +116,7 @@ class HexGridWindow(wx.ScrolledWindow):
         sizer.AddGrowableRow(1)
         self.SetSizer(sizer)
         self.SetTargetWindow(self.main)
+        self.set_pane_sizes(3000, 1000)
         #self.SetScrollRate(20,20)
         self.Bind(wx.EVT_SCROLLWIN, self.on_scroll_window)
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
@@ -128,13 +135,15 @@ class HexGridWindow(wx.ScrolledWindow):
         print "VirtualSize " + str(self.GetVirtualSize())
         event.Skip()
        
-    def set_pane_sizes(self, width, height, left_width, top_height):
+    def set_pane_sizes(self, width, height):
         """
         Set the size of the 3 panes as follow:
             - main = width, height
             - top = width, 40
             - left = 80, height
         """
+        top_height = self.main.fh
+        left_width = self.left.row_label_char_size * self.main.fw + self.row_label_border_width
         self.main.SetVirtualSize(wx.Size(width,height))
         #(wt, ht) = self.top.GetSize()
         self.top.SetVirtualSize(wx.Size(width, top_height))
@@ -215,7 +224,6 @@ class MyApp(wx.App):
         id = wx.NewId()
         frame = wx.Frame(None, id, "Test Text Grid" )
         scroll = HexGridWindow(frame, wx.NewId())
-        scroll.set_pane_sizes(3000, 1000, 80, 20)
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()
