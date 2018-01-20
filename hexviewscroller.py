@@ -108,6 +108,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.row_header_bg_color = wx.Colour(224, 224, 224)
         self.col_header_bg_color = wx.Colour(224, 224, 224)
         self.highlight_color = wx.Colour(100, 200, 230)
+        self.scroll_delay = 30  # milliseconds
 
         self.update_dependents = self.update_dependents_null
         self.main = hexview.FixedFontDataWindow(self, self, 1000)

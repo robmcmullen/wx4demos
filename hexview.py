@@ -295,7 +295,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.parent_scrolled_window = parent
         self.EnableScrolling(False, False)
         self.nextScrollTime = 0
-        self.SCROLLDELAY = 0.050 # seconds
         self.scrollTimer = wx.Timer(self)
         self.scroller = Scroller(self)
 
@@ -305,14 +304,14 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
     def CanScroll(self):
        if time.time() >  self.nextScrollTime:
-           self.nextScrollTime = time.time() + self.SCROLLDELAY
+           self.nextScrollTime = time.time() + (self.settings_obj.scroll_delay / 1000.0)
            return True
        else:
            return False
 
     def SetScrollTimer(self):
         oneShot = True
-        self.scrollTimer.Start(1000*self.SCROLLDELAY/2, oneShot)
+        self.scrollTimer.Start(self.settings_obj.scroll_delay/2, oneShot)
         self.Bind(wx.EVT_TIMER, self.OnTimer)
 
     def OnTimer(self, event):
