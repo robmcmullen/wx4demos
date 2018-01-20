@@ -102,9 +102,10 @@ class HexGridWindow(wx.ScrolledWindow):
         self.SetAutoLayout(True)
 
         self.row_label_border_width = 3
+        self.row_height_extra_padding = -3
 
         self.update_dependents = self.update_dependents_null
-        self.main = hexview.FixedFontDataWindow(self, 1000)
+        self.main = hexview.FixedFontDataWindow(self, self, 1000)
         self.top = AuxWindow(self, self.main, True, False)
         self.left = AuxWindow(self, self.main, False, True)
         sizer = wx.FlexGridSizer(2,2,0,0)

@@ -102,12 +102,12 @@ class OldFixedFontDataWindow(wx.lib.editor.Editor):
 
 
 class FixedFontDataWindow(wx.ScrolledWindow):
-    def __init__(self, parent, num_lines):
+    def __init__(self, parent, settings_obj, num_lines):
 
         wx.ScrolledWindow.__init__(self, parent, -1, style=wx.WANTS_CHARS)
 
         self.isDrawing = False
-
+        self.settings_obj = settings_obj
         self.InitCoords()
         self.InitFonts()
         self.SetColors()
@@ -219,7 +219,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.font = self.NiceFontForPlatform()
         dc.SetFont(self.font)
         self.fw = dc.GetCharWidth()
-        self.fh = dc.GetCharHeight()
+        self.fh = dc.GetCharHeight() + self.settings_obj.row_height_extra_padding
 
     def SetColors(self):
         self.fgColor = wx.BLACK
