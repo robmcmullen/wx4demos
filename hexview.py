@@ -49,6 +49,10 @@ class OldFixedFontDataWindow(wx.lib.editor.Editor):
         wx.lib.editor.Editor.__init__(self, parent, -1)
         self.SetText(FakeList(num_lines))
 
+    def SetScrollManager(self, parent):
+        self.scroller = Scroller(parent)
+        self.AdjustScrollbars()
+
     #### Overrides
 
     def CalcMaxLineLen(self):
@@ -178,11 +182,12 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             dc = wx.ClientDC(self)
         if dc.IsOk():
             self.SetCharDimensions()
-            print(self.sx, self.sy)
-            #self.KeepCursorOnScreen()
-            self.AdjustScrollbars()
+            print("scroll:", self.sx, self.sy, "cursor", self.cx, self.cy)
+            self.KeepCursorOnScreen()
+            #self.AdjustScrollbars()
             self.DrawSimpleCursor(0,0, dc, True)
             self.Draw(dc)
+            self.parent_scrolled_window.update_dependents()
 
     def OnPaint(self, event):
         dc = wx.PaintDC(self)
@@ -284,6 +289,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def InitScrolling(self, parent):
         # we don't rely on the windows system to scroll for us; we just
         # redraw the screen manually every time
+        self.parent_scrolled_window = parent
         self.EnableScrolling(False, False)
         self.nextScrollTime = 0
         self.SCROLLDELAY = 0.050 # seconds
@@ -325,7 +331,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def HandleBelowScreen(self, row):
         self.SetScrollTimer()
         if self.CanScroll():
-            row = self.sy + self.sh
+            row = self.sy + self.sh + 1
             row  = min(row, self.LinesInFile() - 1)
             self.cy = row
 

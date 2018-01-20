@@ -97,6 +97,7 @@ class HexGridWindow(wx.ScrolledWindow):
         wx.ScrolledWindow.__init__ (self, *args, **kwargs)
         self.SetAutoLayout(True)
 
+        self.update_dependents = self.update_dependents_null
         self.main = hexview.FixedFontDataWindow(self, 1000)
         self.top = AuxWindow(self, self.main, True, False)
         self.left = AuxWindow(self, self.main, False, True)
@@ -117,6 +118,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.main.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
         self.top.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
         self.left.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
+        self.update_dependents = self.update_dependents_post_init
 
     def on_left_up(self, event):
         print
@@ -190,6 +192,11 @@ class HexGridWindow(wx.ScrolledWindow):
         else:
             self.VertScroll(event, eventType)
         self.main.UpdateView()
+
+    def update_dependents_null(self):
+        pass
+
+    def update_dependents_post_init(self):
         self.top.UpdateView()
         self.left.UpdateView()
 
