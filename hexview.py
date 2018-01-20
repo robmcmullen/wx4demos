@@ -66,18 +66,18 @@ class OldFixedFontDataWindow(wx.lib.editor.Editor):
         if self.IsLine(line):
             l   = line
             t   = self.lines[l]
-            dc.SetTextForeground(self.fgColor)
+            dc.SetTextForeground(self.settings_obj.grid_text_color)
             fragments = selection.Selection(
                 self.SelectBegin, self.SelectEnd,
                 self.sx, self.sw, line, t)
             x = 0
             for (data, selected) in fragments:
                 if selected:
-                    dc.SetTextBackground(self.selectColor)
+                    dc.SetTextBackground(self.settings_obj.highlight_color)
                     if x == 0 and len(data) == 0 and len(fragments) == 1:
                         data = ' '
                 else:
-                    dc.SetTextBackground(self.bgColor)
+                    dc.SetTextBackground(self.settings_obj.grid_bg_color)
                 self.DrawEditText(data, x, sy - self.sy, dc)
                 x += len(data)
 
@@ -89,9 +89,9 @@ class OldFixedFontDataWindow(wx.lib.editor.Editor):
         if dc.IsOk():
             dc.SetFont(self.font)
             dc.SetBackgroundMode(wx.SOLID)
-            dc.SetTextBackground(self.bgColor)
-            dc.SetTextForeground(self.fgColor)
-            dc.SetBackground(wx.Brush(self.bgColor))
+            dc.SetTextBackground(self.settings_obj.grid_bg_color)
+            dc.SetTextForeground(self.settings_obj.grid_text_color)
+            dc.SetBackground(wx.Brush(self.settings_obj.grid_bg_color))
             dc.Clear()
             for line in range(self.sy, self.sy + self.sh + 1):
                 self.DrawLine(line, line, dc)
@@ -110,7 +110,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.settings_obj = settings_obj
         self.InitCoords()
         self.InitFonts()
-        self.SetColors()
         self.MapEvents()
         self.InitDoubleBuffering()
         self.InitScrolling(parent)
@@ -220,11 +219,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         dc.SetFont(self.font)
         self.fw = dc.GetCharWidth()
         self.fh = dc.GetCharHeight() + self.settings_obj.row_height_extra_padding
-
-    def SetColors(self):
-        self.fgColor = wx.BLACK
-        self.bgColor = wx.WHITE
-        self.selectColor = wx.Colour(238, 220, 120)  # r, g, b = emacsOrange
 
     def InitDoubleBuffering(self):
         pass
@@ -539,10 +533,10 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def OnDestroy(self, event):
         self.mdc = None
         self.odc = None
-        self.bgColor = None
-        self.fgColor = None
+        self.settings_obj.grid_bg_color = None
+        self.settings_obj.grid_text_color = None
         self.font = None
-        self.selectColor = None
+        self.settings_obj.highlight_color = None
         self.scrollTimer = None
         self.eofMarker = None
 
@@ -594,18 +588,18 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if self.IsLine(line):
             l   = line
             t   = self.lines[l]
-            dc.SetTextForeground(self.fgColor)
+            dc.SetTextForeground(self.settings_obj.grid_text_color)
             fragments = selection.Selection(
                 self.SelectBegin, self.SelectEnd,
                 self.sx, self.sw, line, t)
             x = 0
             for (data, selected) in fragments:
                 if selected:
-                    dc.SetTextBackground(self.selectColor)
+                    dc.SetTextBackground(self.settings_obj.highlight_color)
                     if x == 0 and len(data) == 0 and len(fragments) == 1:
                         data = ' '
                 else:
-                    dc.SetTextBackground(self.bgColor)
+                    dc.SetTextBackground(self.settings_obj.grid_bg_color)
                 self.DrawEditText(data, x, sy - self.sy, dc)
                 x += len(data)
 
@@ -617,9 +611,9 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if dc.IsOk():
             dc.SetFont(self.font)
             dc.SetBackgroundMode(wx.SOLID)
-            dc.SetTextBackground(self.bgColor)
-            dc.SetTextForeground(self.fgColor)
-            dc.SetBackground(wx.Brush(self.bgColor))
+            dc.SetTextBackground(self.settings_obj.grid_bg_color)
+            dc.SetTextForeground(self.settings_obj.grid_text_color)
+            dc.SetBackground(wx.Brush(self.settings_obj.grid_bg_color))
             dc.Clear()
             for line in range(self.sy, self.sy + self.sh + 1):
                 self.DrawLine(line, line, dc)

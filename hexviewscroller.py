@@ -70,9 +70,9 @@ class AuxWindow(wx.ScrolledWindow):
         if dc.IsOk():
             dc.SetFont(s.font)
             dc.SetBackgroundMode(wx.SOLID)
-            dc.SetTextBackground(s.bgColor)
-            dc.SetTextForeground(s.fgColor)
-            dc.SetBackground(wx.Brush(s.bgColor))
+            dc.SetTextBackground(s.settings_obj.row_header_bg_color)
+            dc.SetTextForeground(s.settings_obj.grid_text_color)
+            dc.SetBackground(wx.Brush(s.settings_obj.row_header_bg_color))
             dc.Clear()
             for line in range(s.sy, s.sy + s.sh + 1):
                 if s.IsLine(line):
@@ -87,9 +87,9 @@ class AuxWindow(wx.ScrolledWindow):
         if dc.IsOk():
             dc.SetFont(s.font)
             dc.SetBackgroundMode(wx.SOLID)
-            dc.SetTextBackground(s.bgColor)
-            dc.SetTextForeground(s.fgColor)
-            dc.SetBackground(wx.Brush(s.bgColor))
+            dc.SetTextBackground(s.settings_obj.col_header_bg_color)
+            dc.SetTextForeground(s.settings_obj.grid_text_color)
+            dc.SetBackground(wx.Brush(s.settings_obj.col_header_bg_color))
             dc.Clear()
             line = self.header[s.sx:]
             self.DrawLine(line, s.sy, dc)
@@ -103,6 +103,11 @@ class HexGridWindow(wx.ScrolledWindow):
 
         self.row_label_border_width = 3
         self.row_height_extra_padding = -3
+        self.grid_bg_color = wx.WHITE
+        self.grid_text_color = wx.BLACK
+        self.row_header_bg_color = wx.Colour(224, 224, 224)
+        self.col_header_bg_color = wx.Colour(224, 224, 224)
+        self.highlight_color = wx.Colour(100, 200, 230)
 
         self.update_dependents = self.update_dependents_null
         self.main = hexview.FixedFontDataWindow(self, self, 1000)
@@ -118,6 +123,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.SetSizer(sizer)
         self.SetTargetWindow(self.main)
         self.set_pane_sizes(3000, 1000)
+        self.SetBackgroundColour(self.col_header_bg_color)
         #self.SetScrollRate(20,20)
         self.Bind(wx.EVT_SCROLLWIN, self.on_scroll_window)
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
