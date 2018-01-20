@@ -39,7 +39,8 @@ class FakeList(object):
         #print(item, type(item))
         try:
             #return "0A 0X 0Y FF sv-bdizc  00 00 00 LDA $%04x" % ((item * 4) + 0x600)
-            return "c0f3 f4e1 f2f4 cdcd cdcd 48ad c602 1869"
+            #return "%04x c0f3 f4e1 f2f4 cdcd cdcd 48ad c602" % (item * 16 + 0x6000)
+            return "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x" % tuple(range(item & 0xff, (item & 0xff) + 16))
         except:
             return "slice"
 
@@ -146,10 +147,18 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 ##------------------- Platform-specific stuff
 
     def NiceFontForPlatform(self):
-        if wx.Platform == "__WXMSW__":
-            font = wx.Font(10, wx.FONTFAMILY_MODERN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        point_size = 10
+        family = wx.DEFAULT
+        style = wx.NORMAL
+        weight = wx.NORMAL
+        underline = False
+        if wx.Platform == "__WXMAC__":
+            face_name = "Monaco"
+        elif wx.Platform == "__WXMSW__":
+            face_name = "Lucida Console"
         else:
-            font = wx.Font(12, wx.FONTFAMILY_MODERN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False)
+            face_name = "monospace"
+        font = wx.Font(point_size, family, style, weight, underline, face_name)
         return font
 
 ##-------------------- UpdateView/Cursor code
