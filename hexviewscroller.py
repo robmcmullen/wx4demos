@@ -101,6 +101,7 @@ class HexGridWindow(wx.ScrolledWindow):
         wx.ScrolledWindow.__init__ (self, *args, **kwargs)
         self.SetAutoLayout(True)
 
+        self.col_label_border_width = 3
         self.row_label_border_width = 3
         self.row_height_extra_padding = -3
         self.grid_bg_color = wx.WHITE
@@ -150,7 +151,7 @@ class HexGridWindow(wx.ScrolledWindow):
             - top = width, 40
             - left = 80, height
         """
-        top_height = self.main.fh
+        top_height = self.main.fh + self.col_label_border_width
         left_width = self.left.row_label_char_size * self.main.fw + self.row_label_border_width
         self.main.SetVirtualSize(wx.Size(width,height))
         #(wt, ht) = self.top.GetSize()
