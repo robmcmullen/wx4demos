@@ -183,8 +183,10 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if dc.IsOk():
             self.SetCharDimensions()
             print("scroll:", self.sx, self.sy, "cursor", self.cx, self.cy)
-            self.KeepCursorOnScreen()
-            #self.AdjustScrollbars()
+            if self.Selecting:
+                self.KeepCursorOnScreen()
+            else:
+                self.AdjustScrollbars()
             self.DrawSimpleCursor(0,0, dc, True)
             self.Draw(dc)
             self.parent_scrolled_window.update_dependents()
@@ -229,12 +231,10 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.SetCharDimensions()
         maxLineLen = self.CalcMaxLineLen()
         self.sx = ForceBetween(0, self.sx, max(self.sw, maxLineLen - self.sw + 1))
-        self.cx = ForceBetween(self.sx, self.cx, self.sx + self.sw - 1)
 
     def VertBoundaries(self):
         self.SetCharDimensions()
         self.sy = ForceBetween(0, self.sy, max(self.sh, self.LinesInFile() - self.sh + 1))
-        self.cy = ForceBetween(self.sy, self.cy, self.sy + self.sh - 1)
 
     def cVert(self, num):
         self.cy = self.cy + num
