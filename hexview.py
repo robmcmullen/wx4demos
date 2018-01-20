@@ -1,8 +1,11 @@
 import time
 
+import numpy as np
+
 import wx
 import wx.lib.editor
-import wx.lib.editor.selection as selection
+
+from atrcopy import match_bit_mask, comment_bit_mask, user_bit_mask, selected_bit_mask, diff_bit_mask
 
 def ForceBetween(min, val, max):
     if val  > max:
@@ -45,59 +48,95 @@ class FakeList(object):
             return "slice"
 
 
-class OldFixedFontDataWindow(wx.lib.editor.Editor):
-    def __init__(self, parent, num_lines):
-        wx.lib.editor.Editor.__init__(self, parent, -1)
-        self.SetText(FakeList(num_lines))
+class DrawTextImageCache(object):
+    def __init__(self, machine, font=None, width=-1, height=-1):
+        self.width = width
+        self.height = height
+        self.font = font
+        self.cache = {}
+        self.set_colors(machine)
 
-    def SetScrollManager(self, parent):
-        self.scroller = Scroller(parent)
-        self.AdjustScrollbars()
+    def invalidate(self):
+        self.cache = {}
 
-    #### Overrides
+    def set_colors(self, m):
+        self.color = m.text_color
+        self.diff_color = m.diff_text_color
+        if self.font is None:
+            self.font = m.text_font
+        self.selected_background = m.highlight_color
+        self.selected_brush = wx.Brush(m.highlight_color, wx.SOLID)
+        self.selected_pen = wx.Pen(m.highlight_color, 1, wx.SOLID)
+        self.normal_background = m.background_color
+        self.normal_brush = wx.Brush(m.background_color, wx.SOLID)
+        self.normal_pen = wx.Pen(m.background_color, 1, wx.SOLID)
+        self.data_background = m.data_color
+        self.data_brush = wx.Brush(m.data_color, wx.SOLID)
+        self.cursor_background = m.background_color
+        self.cursor_brush = wx.Brush(m.background_color, wx.TRANSPARENT)
+        self.cursor_pen = wx.Pen(m.unfocused_cursor_color, 2, wx.SOLID)
+        self.match_background = m.match_background_color
+        self.match_brush = wx.Brush(m.match_background_color, wx.SOLID)
+        self.match_pen = wx.Pen(m.match_background_color, 1, wx.SOLID)
+        self.comment_background = m.comment_background_color
+        self.comment_brush = wx.Brush(m.comment_background_color, wx.SOLID)
+        self.comment_pen = wx.Pen(m.comment_background_color, 1, wx.SOLID)
 
-    def CalcMaxLineLen(self):
-        return 64
+    def draw_blank(self, dc, rect):
+        dc.SetBrush(wx.Brush(wx.WHITE, wx.SOLID))
+        dc.SetPen(wx.Pen(wx.WHITE, 1, wx.SOLID))
+        dc.DrawRectangle(rect)
 
-    def DrawEditText(self, t, x, y, dc):
-        dc.DrawText(t, x * self.fw, y * self.fh)
+    def draw_cached_text(self, dc, rect, text, style):
+        k = (text, style, rect.width, rect.height)
+        try:
+            bmp = self.cache[k]
+        except KeyError:
+            bmp = wx.Bitmap(rect.width, rect.height)
+            mdc = wx.MemoryDC()
+            mdc.SelectObject(bmp)
+            r = wx.Rect(0, 0, rect.width, rect.height)
+            self.draw_text_to_dc(mdc, r, text, style)
+            del mdc  # force the bitmap painting by deleting the gc
+            self.cache[k] = bmp
+        dc.DrawBitmap(bmp, rect.x, rect.y)
 
-    def DrawLine(self, sy, line, dc):
-        if self.IsLine(line):
-            l   = line
-            t   = self.lines[l]
-            dc.SetTextForeground(self.settings_obj.grid_text_color)
-            fragments = selection.Selection(
-                self.SelectBegin, self.SelectEnd,
-                self.sx, self.sw, line, t)
-            x = 0
-            for (data, selected) in fragments:
-                if selected:
-                    dc.SetTextBackground(self.settings_obj.highlight_color)
-                    if x == 0 and len(data) == 0 and len(fragments) == 1:
-                        data = ' '
-                else:
-                    dc.SetTextBackground(self.settings_obj.grid_bg_color)
-                self.DrawEditText(data, x, sy - self.sy, dc)
-                x += len(data)
+    def draw_text_to_dc(self, dc, rect, text, style):
+        if style & selected_bit_mask:
+            dc.SetBrush(self.selected_brush)
+            dc.SetPen(self.selected_pen)
+            dc.SetTextBackground(self.selected_background)
+        elif style & match_bit_mask:
+            dc.SetPen(self.match_pen)
+            dc.SetBrush(self.match_brush)
+            dc.SetTextBackground(self.match_background)
+        elif style & comment_bit_mask:
+            dc.SetPen(self.comment_pen)
+            dc.SetBrush(self.comment_brush)
+            dc.SetTextBackground(self.comment_background)
+        elif style & user_bit_mask:
+            dc.SetPen(self.normal_pen)
+            dc.SetBrush(self.data_brush)
+            dc.SetTextBackground(self.data_background)
+        else:
+            dc.SetPen(self.normal_pen)
+            dc.SetBrush(self.normal_brush)
+            dc.SetTextBackground(self.normal_background)
+        dc.SetBackgroundMode(wx.SOLID)
+        dc.DrawRectangle(rect)
+        if style & diff_bit_mask:
+            dc.SetTextForeground(self.diff_color)
+        else:
+            dc.SetTextForeground(self.color)
+        dc.SetFont(self.font)
+        dc.DrawText(text, rect.x, rect.y)
 
-    def Draw(self, odc=None):
-        if not odc:
-            odc = wx.ClientDC(self)
-
-        dc = wx.BufferedDC(odc)
-        if dc.IsOk():
-            dc.SetFont(self.font)
-            dc.SetBackgroundMode(wx.SOLID)
-            dc.SetTextBackground(self.settings_obj.grid_bg_color)
-            dc.SetTextForeground(self.settings_obj.grid_text_color)
-            dc.SetBackground(wx.Brush(self.settings_obj.grid_bg_color))
-            dc.Clear()
-            for line in range(self.sy, self.sy + self.sh + 1):
-                self.DrawLine(line, line, dc)
-            if len(self.lines) < self.sh + self.sy:
-                self.DrawEofMarker(dc)
-            self.DrawCursor(dc)
+    def draw_text(self, dc, rect, text, style):
+        print(text, rect)
+        for i, c in enumerate(text):
+            s = style[i]
+            self.draw_cached_text(dc, rect, c, s)
+            rect.x += self.width * len(c)
 
 
 
@@ -219,6 +258,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         dc.SetFont(self.font)
         self.fw = dc.GetCharWidth()
         self.fh = dc.GetCharHeight() + self.settings_obj.row_height_extra_padding
+        self.text_renderer = DrawTextImageCache(self.settings_obj, self.font, self.fw, self.fh)
 
     def InitDoubleBuffering(self):
         pass
@@ -532,8 +572,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def OnDestroy(self, event):
         self.mdc = None
         self.odc = None
-        self.settings_obj.grid_bg_color = None
-        self.settings_obj.grid_text_color = None
+        self.settings_obj.background_color = None
+        self.settings_obj.text_color = None
         self.font = None
         self.settings_obj.highlight_color = None
         self.scrollTimer = None
@@ -580,27 +620,41 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.sco_x = xp
         self.sco_y = yp
 
-    def DrawEditText(self, t, x, y, dc):
-        dc.DrawText(t, x * self.fw, y * self.fh)
+    def DrawEditText(self, t, style, x, y, dc):
+        #dc.DrawText(t, x * self.fw, y * self.fh)
+        rect = wx.Rect(x * self.fw, y * self.fh, len(t) * self.fw, self.fh)
+        self.text_renderer.draw_text(dc, rect, t, style)
+
+    def get_style_array(self, text, line):
+        count = len(text)
+        style = np.zeros(count, dtype=np.uint8)
+        if self.SelectBegin is None or self.SelectEnd is None:
+            return style
+        (bRow, bCol) = self.SelectBegin
+        (eRow, eCol) = self.SelectEnd
+        if (eRow < bRow):
+            (bRow, bCol) = self.SelectEnd
+            (eRow, eCol) = self.SelectBegin
+        if (line < bRow or eRow < line):
+            return style
+        if (bRow < line and line < eRow):
+            return style + selected_bit_mask
+        if (bRow == eRow) and (eCol < bCol):
+            (bCol, eCol) = (eCol, bCol)
+        # selection either starts or ends on this line
+        if (bRow < line):
+            bCol = 0
+        if (line < eRow):
+            eCol = count
+        style[bCol:eCol] = selected_bit_mask
+        return style
 
     def DrawLine(self, sy, line, dc):
         if self.IsLine(line):
             l   = line
             t   = self.lines[l]
-            dc.SetTextForeground(self.settings_obj.grid_text_color)
-            fragments = selection.Selection(
-                self.SelectBegin, self.SelectEnd,
-                self.sx, self.sw, line, t)
-            x = 0
-            for (data, selected) in fragments:
-                if selected:
-                    dc.SetTextBackground(self.settings_obj.highlight_color)
-                    if x == 0 and len(data) == 0 and len(fragments) == 1:
-                        data = ' '
-                else:
-                    dc.SetTextBackground(self.settings_obj.grid_bg_color)
-                self.DrawEditText(data, x, sy - self.sy, dc)
-                x += len(data)
+            style = self.get_style_array(t, l)
+            self.DrawEditText(t, style, 0, sy - self.sy, dc)
 
     def Draw(self, odc=None):
         if not odc:
@@ -610,9 +664,9 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if dc.IsOk():
             dc.SetFont(self.font)
             dc.SetBackgroundMode(wx.SOLID)
-            dc.SetTextBackground(self.settings_obj.grid_bg_color)
-            dc.SetTextForeground(self.settings_obj.grid_text_color)
-            dc.SetBackground(wx.Brush(self.settings_obj.grid_bg_color))
+            dc.SetTextBackground(self.settings_obj.background_color)
+            dc.SetTextForeground(self.settings_obj.text_color)
+            dc.SetBackground(wx.Brush(self.settings_obj.background_color))
             dc.Clear()
             for line in range(self.sy, self.sy + self.sh + 1):
                 self.DrawLine(line, line, dc)

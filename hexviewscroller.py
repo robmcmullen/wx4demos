@@ -71,7 +71,7 @@ class AuxWindow(wx.ScrolledWindow):
             dc.SetFont(s.font)
             dc.SetBackgroundMode(wx.SOLID)
             dc.SetTextBackground(s.settings_obj.row_header_bg_color)
-            dc.SetTextForeground(s.settings_obj.grid_text_color)
+            dc.SetTextForeground(s.settings_obj.text_color)
             dc.SetBackground(wx.Brush(s.settings_obj.row_header_bg_color))
             dc.Clear()
             for line in range(s.sy, s.sy + s.sh + 1):
@@ -88,7 +88,7 @@ class AuxWindow(wx.ScrolledWindow):
             dc.SetFont(s.font)
             dc.SetBackgroundMode(wx.SOLID)
             dc.SetTextBackground(s.settings_obj.col_header_bg_color)
-            dc.SetTextForeground(s.settings_obj.grid_text_color)
+            dc.SetTextForeground(s.settings_obj.text_color)
             dc.SetBackground(wx.Brush(s.settings_obj.col_header_bg_color))
             dc.Clear()
             line = self.header[s.sx:]
@@ -104,11 +104,16 @@ class HexGridWindow(wx.ScrolledWindow):
         self.col_label_border_width = 3
         self.row_label_border_width = 3
         self.row_height_extra_padding = -3
-        self.grid_bg_color = wx.WHITE
-        self.grid_text_color = wx.BLACK
+        self.background_color = wx.WHITE
+        self.text_color = wx.BLACK
         self.row_header_bg_color = wx.Colour(224, 224, 224)
         self.col_header_bg_color = wx.Colour(224, 224, 224)
         self.highlight_color = wx.Colour(100, 200, 230)
+        self.unfocused_cursor_color = (128, 128, 128)
+        self.data_color = (224, 224, 224)
+        self.match_background_color = (255, 255, 180)
+        self.comment_background_color = (255, 180, 200)
+        self.diff_text_color = (255, 0, 0)
         self.scroll_delay = 30  # milliseconds
 
         self.update_dependents = self.update_dependents_null
