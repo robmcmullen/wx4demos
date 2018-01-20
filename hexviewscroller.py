@@ -74,7 +74,7 @@ class AuxWindow(wx.ScrolledWindow):
             dc.SetTextForeground(s.fgColor)
             dc.SetBackground(wx.Brush(s.bgColor))
             dc.Clear()
-            for line in range(s.sy, s.sy + s.sh):
+            for line in range(s.sy, s.sy + s.sh + 1):
                 if s.IsLine(line):
                     self.DrawLine("%04x" % line, line, dc)
 
