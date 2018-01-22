@@ -181,7 +181,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.Bind(wx.EVT_MOTION, self.OnMotion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.settings_obj.on_mouse_wheel)
         self.Bind(wx.EVT_SCROLLWIN, self.settings_obj.on_scroll_window)
-        #self.Bind(wx.EVT_CHAR, self.OnChar)
+        self.Bind(wx.EVT_CHAR, self.OnChar)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
@@ -511,8 +511,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             self.cx -= 1
 
     def MoveRight(self, event):
-        linelen = self.current_line_length
-        if self.cx == linelen:
+        linelen = self.current_line_length - 1
+        if self.cx >= linelen:
             if self.cy == len(self.lines) - 1:
                 wx.Bell()
             else:
@@ -540,6 +540,27 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def MoveEndOfFile(self, event):
         self.cy = len(self.lines) - 1
         self.cx = self.current_line_length
+
+    def OnChar(self, event):
+        action = {}
+        action[wx.WXK_DOWN]  = self.MoveDown
+        action[wx.WXK_UP]    = self.MoveUp
+        action[wx.WXK_LEFT]  = self.MoveLeft
+        action[wx.WXK_RIGHT] = self.MoveRight
+        action[wx.WXK_PAGEDOWN]  = self.MovePageDown
+        action[wx.WXK_PAGEUP] = self.MovePageUp
+        action[wx.WXK_HOME]  = self.MoveHome
+        action[wx.WXK_END]   = self.MoveEnd
+        key = event.GetKeyCode()
+        print("OESUHCOEHUSRCOUHSRCOHEUCROEHUH")
+        try:
+            action[key](event)
+            self.enforce_valid_cursor()
+            self.UpdateView()
+            self.AdjustScrollbars()
+        except KeyError:
+            print(key)
+            event.Skip()
 
 ##----------- selection routines
 
