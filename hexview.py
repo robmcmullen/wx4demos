@@ -654,6 +654,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             l   = line
             t   = self.lines[l]
             style = self.get_style_array(t, l)
+            t   = t[self.sx:]
+            style = style[self.sx:]
             self.DrawEditText(t, style, 0, sy - self.sy, dc)
 
     def Draw(self, odc=None):
