@@ -99,40 +99,44 @@ class DrawTextImageCache(object):
             mdc = wx.MemoryDC()
             mdc.SelectObject(bmp)
             r = wx.Rect(0, 0, rect.width, rect.height)
-            self.draw_text_to_dc(mdc, r, text, style)
+            self.draw_text_to_dc(mdc, r, r, text, style)
             del mdc  # force the bitmap painting by deleting the gc
             self.cache[k] = bmp
         dc.DrawBitmap(bmp, rect.x, rect.y)
 
-    def draw_text_to_dc(self, dc, rect, text, style):
+    def draw_text_to_dc(self, dc, bg_rect, fg_rect, text, style):
         if style & selected_bit_mask:
             dc.SetBrush(self.selected_brush)
             dc.SetPen(self.selected_pen)
+            dc.SetBackground(self.selected_brush)
             dc.SetTextBackground(self.selected_background)
         elif style & match_bit_mask:
             dc.SetPen(self.match_pen)
             dc.SetBrush(self.match_brush)
+            dc.SetBackground(self.match_brush)
             dc.SetTextBackground(self.match_background)
         elif style & comment_bit_mask:
             dc.SetPen(self.comment_pen)
             dc.SetBrush(self.comment_brush)
+            dc.SetBackground(self.comment_brush)
             dc.SetTextBackground(self.comment_background)
         elif style & user_bit_mask:
             dc.SetPen(self.normal_pen)
             dc.SetBrush(self.data_brush)
+            dc.SetBackground(self.normal_brush)
             dc.SetTextBackground(self.data_background)
         else:
             dc.SetPen(self.normal_pen)
             dc.SetBrush(self.normal_brush)
+            dc.SetBackground(self.normal_brush)
             dc.SetTextBackground(self.normal_background)
-        dc.SetBackgroundMode(wx.SOLID)
-        dc.DrawRectangle(rect)
+        dc.Clear()
         if style & diff_bit_mask:
             dc.SetTextForeground(self.diff_color)
         else:
             dc.SetTextForeground(self.color)
         dc.SetFont(self.font)
-        dc.DrawText(text, rect.x, rect.y)
+        dc.DrawText(text, fg_rect.x, fg_rect.y)
 
     def draw_text(self, dc, rect, text, style):
         print(text, rect)
@@ -709,14 +713,17 @@ class HexByteImageCache(DrawTextImageCache):
             mdc.SelectObject(bmp)
             t = "%02x" % text
             r = wx.Rect(self.width_padding, 0, self.char_width * 2, rect.height)
-            self.draw_text_to_dc(mdc, r, t, style)
+            bg_rect = wx.Rect(0, 0, rect.width, rect.height)
+            self.draw_text_to_dc(mdc, bg_rect, r, t, style)
             del mdc  # force the bitmap painting by deleting the gc
             self.cache[k] = bmp
         dc.DrawBitmap(bmp, rect.x, rect.y)
 
     def draw_text(self, dc, rect, text, style):
-        print(text, rect)
+        print(rect, text)
+        rect.width = self.cell_width
         for i, c in enumerate(text):
+            print(i, c, rect)
             self.draw_cached_text(dc, rect, c, style[i])
             rect.x += self.cell_width
 
@@ -727,7 +734,7 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
 
     def setup_metadata(self):
         print(self.lines, self.lines.shape, type(self.lines.shape))
-        c, self.lines_in_file = self.lines.shape
+        self.lines_in_file, c = self.lines.shape
         self.current_line_length = c
         self.max_line_len = c
 
@@ -735,6 +742,14 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
         self.text_renderer = HexByteImageCache(self.settings_obj, self.font, self.fw, self.fh)
         self.fw = self.text_renderer.cell_width
         self.fh = self.text_renderer.cell_height
+
+    def DrawLine(self, sy, line, dc):
+        if self.IsLine(line):
+            d = self.lines[line,self.sx:]
+            style = self.get_style_array(d, line)
+            # t   = t[self.sx:]
+            # style = style[self.sx:]
+            self.DrawEditText(d, style, 0, sy - self.sy, dc)
 
 
 if __name__ == "__main__":

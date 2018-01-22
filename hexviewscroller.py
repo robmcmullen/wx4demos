@@ -171,8 +171,6 @@ class HexGridWindow(wx.ScrolledWindow):
         wx.CallAfter(self.main.SetScrollManager, self)
 
     def HorizScroll(self, event, eventType):
-        maxLineLen = self.main.CalcMaxLineLen()
-
         if eventType == wx.wxEVT_SCROLLWIN_LINEUP:
             self.main.sx -= 1
         elif eventType == wx.wxEVT_SCROLLWIN_LINEDOWN:
@@ -184,8 +182,8 @@ class HexGridWindow(wx.ScrolledWindow):
         elif eventType == wx.wxEVT_SCROLLWIN_TOP:
             self.main.sx = self.main.cx = 0
         elif eventType == wx.wxEVT_SCROLLWIN_BOTTOM:
-            self.main.sx = maxLineLen - self.main.sw
-            self.main.cx = maxLineLen
+            self.main.sx = self.main.max_line_len - self.main.sw
+            self.main.cx = self.main.max_line_len
         else:
             self.main.sx = event.GetPosition()
 
@@ -268,7 +266,7 @@ class MyApp(wx.App):
         frame = wx.Frame(None, id, "Test Text Grid" )
         scroll = HexGridWindow(frame, wx.NewId())
         #scroll.set_data(hexview.FakeList(1000))
-        scroll.set_data(np.arange(1024, dtype=np.uint8).reshape((16,-1)))
+        scroll.set_data(np.arange(1024, dtype=np.uint8).reshape((-1,16)))
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()
