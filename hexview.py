@@ -75,9 +75,6 @@ class DrawTextImageCache(object):
         self.normal_pen = wx.Pen(m.background_color, 1, wx.SOLID)
         self.data_background = m.data_color
         self.data_brush = wx.Brush(m.data_color, wx.SOLID)
-        self.cursor_background = m.background_color
-        self.cursor_brush = wx.Brush(m.background_color, wx.TRANSPARENT)
-        self.cursor_pen = wx.Pen(m.unfocused_cursor_color, 2, wx.SOLID)
         self.match_background = m.match_background_color
         self.match_brush = wx.Brush(m.match_background_color, wx.SOLID)
         self.match_pen = wx.Pen(m.match_background_color, 1, wx.SOLID)
@@ -278,11 +275,11 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.cy = self.cy + num
         self.cy = ForceBetween(0, self.cy, self.lines_in_file - 1)
         self.sy = ForceBetween(self.cy - self.sh + 1, self.sy, self.cy)
-        self.cx = min(self.cx, self.current_line_length)
+        self.cx = min(self.cx, self.current_line_length - 1)
 
     def cHoriz(self, num):
         self.cx = self.cx + num
-        self.cx = ForceBetween(0, self.cx, self.current_line_length)
+        self.cx = ForceBetween(0, self.cx, self.current_line_length - 1)
         self.sx = ForceBetween(self.cx - self.sw + 1, self.sx, self.cx)
 
     def AboveScreen(self, row):
@@ -381,7 +378,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.SetScrollTimer()
         if self.CanScroll():
             col = self.sx + self.sw + 1
-            col = min(col, self.current_line_length)
+            col = min(col, self.current_line_length - 1)
             self.cx = col
 
 ##------------------------ mousing functions
@@ -581,9 +578,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
         if (self.lines_in_file)<self.cy: #-1 ?
             self.cy = self.lines_in_file-1
-        if self.cy > 0:
-            s = self.lines[self.cy]
-
+        if self.cy >= 0:
             x = self.cx - self.sx
             y = self.cy - self.sy
             self.DrawSimpleCursor(x, y, dc)
@@ -592,15 +587,29 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if not dc:
             dc = wx.ClientDC(self)
 
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
         if old:
             xp = self.sco_x
             yp = self.sco_y
 
-        szx = self.cell_width
-        szy = self.cell_height
-        x = xp * szx
-        y = yp * szy
-        dc.Blit(x,y, szx,szy, dc, x,y, wx.XOR)
+        w = self.cell_width + 2
+        h = self.cell_height + 2
+        x = (xp * self.cell_width) - 1
+        y = (yp * self.cell_height)
+        dc.SetPen(self.settings_obj.cursor_pen)
+        dc.DrawRectangle(x, y, w, h)
+        x -= 1
+        y -= 1
+        w += 2
+        h += 2
+        dc.SetPen(wx.Pen(wx.BLACK))
+        dc.DrawRectangle(x, y, w, h)
+        x -= 1
+        y -= 1
+        w += 2
+        h += 2
+        dc.SetPen(self.settings_obj.cursor_pen)
+        dc.DrawRectangle(x, y, w, h)
         self.sco_x = xp
         self.sco_y = yp
 

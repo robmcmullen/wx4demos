@@ -125,6 +125,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.match_background_color = (255, 255, 180)
         self.comment_background_color = (255, 180, 200)
         self.diff_text_color = (255, 0, 0)
+        self.cursor_pen = wx.Pen(self.unfocused_cursor_color, 1, wx.SOLID)
         self.scroll_delay = 30  # milliseconds
 
         self.text_font = self.NiceFontForPlatform()
