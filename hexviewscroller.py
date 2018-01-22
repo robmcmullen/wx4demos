@@ -1,6 +1,8 @@
 import time
 
 import wx
+import numpy as np
+
 import hexview
 
 # Check wxpython demo for Editor to see a pure-python implementation of an on-
@@ -117,7 +119,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.scroll_delay = 30  # milliseconds
 
         self.update_dependents = self.update_dependents_null
-        self.main = hexview.FixedFontDataWindow(self, self, [])
+        self.main = hexview.FixedFontNumpyWindow(self, self, np.zeros([0, 0], dtype=np.uint8))
         self.top = AuxWindow(self, self.main, True, False)
         self.left = AuxWindow(self, self.main, False, True)
         sizer = wx.FlexGridSizer(2,2,0,0)
@@ -265,7 +267,8 @@ class MyApp(wx.App):
         id = wx.NewId()
         frame = wx.Frame(None, id, "Test Text Grid" )
         scroll = HexGridWindow(frame, wx.NewId())
-        scroll.set_data(hexview.FakeList(1000))
+        #scroll.set_data(hexview.FakeList(1000))
+        scroll.set_data(np.arange(1024, dtype=np.uint8).reshape((16,-1)))
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()

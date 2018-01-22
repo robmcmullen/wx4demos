@@ -50,14 +50,17 @@ class FakeList(object):
 
 class DrawTextImageCache(object):
     def __init__(self, machine, font=None, width=-1, height=-1):
-        self.width = width
-        self.height = height
         self.font = font
         self.cache = {}
+        self.set_size(width, height)
         self.set_colors(machine)
 
     def invalidate(self):
         self.cache = {}
+
+    def set_size(self, w, h):
+        self.cell_width = width
+        self.cell_height = height
 
     def set_colors(self, m):
         self.color = m.text_color
@@ -136,7 +139,7 @@ class DrawTextImageCache(object):
         for i, c in enumerate(text):
             s = style[i]
             self.draw_cached_text(dc, rect, c, s)
-            rect.x += self.width * len(c)
+            rect.x += self.cell_width * len(c)
 
 
 
@@ -216,12 +219,12 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             self.sw = int(self.bw / self.fw) - 1
         else:
             self.sh = int(self.bh / self.fh)
-            if self.LinesInFile() >= self.sh:
+            if self.lines_in_file >= self.sh:
                 self.bw = self.bw - wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
                 self.sw = int(self.bw / self.fw) - 1
 
             self.sw = int(self.bw / self.fw) - 1
-            if self.CalcMaxLineLen() >= self.sw:
+            if self.max_line_len >= self.sw:
                 self.bh = self.bh - wx.SystemSettings.GetMetric(wx.SYS_HSCROLL_Y)
                 self.sh = int(self.bh / self.fh)
 
@@ -259,6 +262,9 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         dc.SetFont(self.font)
         self.fw = dc.GetCharWidth()
         self.fh = dc.GetCharHeight() + self.settings_obj.row_height_extra_padding
+        self.init_renderer()
+
+    def init_renderer(self):
         self.text_renderer = DrawTextImageCache(self.settings_obj, self.font, self.fw, self.fh)
 
     def InitDoubleBuffering(self):
@@ -273,22 +279,22 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
     def HorizBoundaries(self):
         self.SetCharDimensions()
-        maxLineLen = self.CalcMaxLineLen()
+        maxLineLen = self.max_line_len
         self.sx = ForceBetween(0, self.sx, max(self.sw, maxLineLen - self.sw + 1))
 
     def VertBoundaries(self):
         self.SetCharDimensions()
-        self.sy = ForceBetween(0, self.sy, max(self.sh, self.LinesInFile() - self.sh + 1))
+        self.sy = ForceBetween(0, self.sy, max(self.sh, self.lines_in_file - self.sh + 1))
 
     def cVert(self, num):
         self.cy = self.cy + num
-        self.cy = ForceBetween(0, self.cy, self.LinesInFile() - 1)
+        self.cy = ForceBetween(0, self.cy, self.lines_in_file - 1)
         self.sy = ForceBetween(self.cy - self.sh + 1, self.sy, self.cy)
-        self.cx = min(self.cx, self.CurrentLineLength())
+        self.cx = min(self.cx, self.current_line_length)
 
     def cHoriz(self, num):
         self.cx = self.cx + num
-        self.cx = ForceBetween(0, self.cx, self.CurrentLineLength())
+        self.cx = ForceBetween(0, self.cx, self.current_line_length)
         self.sx = ForceBetween(self.cx - self.sw + 1, self.sx, self.cx)
 
     def AboveScreen(self, row):
@@ -311,25 +317,20 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def SetText(self, lines):
         self.InitCoords()
         self.lines = lines
+        self.setup_metadata()
         self.AdjustScrollbars()
         self.UpdateView(None)
 
+    def setup_metadata(self):
+        pass
+
     def IsLine(self, lineNum):
-        return (0<=lineNum) and (lineNum<self.LinesInFile())
+        return (0<=lineNum) and (lineNum<self.lines_in_file)
 
     def GetTextLine(self, lineNum):
         if self.IsLine(lineNum):
             return self.lines[lineNum]
         return ""
-
-    def CurrentLineLength(self):
-        try:
-            return len(self.lines[self.cy])
-        except IndexError:
-            return 0
-
-    def LinesInFile(self):
-        return len(self.lines)
 
 ##-------------------------- Mouse scroll timing functions
 
@@ -378,7 +379,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.SetScrollTimer()
         if self.CanScroll():
             row = self.sy + self.sh + 1
-            row  = min(row, self.LinesInFile() - 1)
+            row  = min(row, self.lines_in_file - 1)
             self.cy = row
 
     def HandleLeftOfScreen(self, col):
@@ -392,7 +393,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.SetScrollTimer()
         if self.CanScroll():
             col = self.sx + self.sw + 1
-            col = min(col, self.CurrentLineLength())
+            col = min(col, self.current_line_length)
             self.cx = col
 
 ##------------------------ mousing functions
@@ -404,7 +405,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         elif self.BelowScreen(row):
             self.HandleBelowScreen(row)
         else:
-            self.cy  = min(row, self.LinesInFile() - 1)
+            self.cy  = min(row, self.lines_in_file - 1)
 
     def MouseToCol(self, mouseX):
         col = self.sx + int(mouseX / self.fw)
@@ -413,7 +414,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         elif self.RightOfScreen(col):
             self.HandleRightOfScreen(col)
         else:
-            self.cx = min(col, self.CurrentLineLength())
+            self.cx = min(col, self.current_line_length)
 
     def MouseToCursor(self, event):
         self.MouseToRow(event.GetY())
@@ -450,7 +451,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 #------------------------- Scrolling
 
     def HorizScroll(self, event, eventType):
-        maxLineLen = self.CalcMaxLineLen()
+        maxLineLen = self.max_line_len
 
         if eventType == wx.wxEVT_SCROLLWIN_LINEUP:
             self.sx -= 1
@@ -482,8 +483,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         elif eventType == wx.wxEVT_SCROLLWIN_TOP:
             self.sy = self.cy = 0
         elif eventType == wx.wxEVT_SCROLLWIN_BOTTOM:
-            self.sy = self.LinesInFile() - self.sh
-            self.cy = self.LinesInFile()
+            self.sy = self.lines_in_file - self.sh
+            self.cy = self.lines_in_file
         else:
             print("Position:", event.GetPosition(), "old:", self.sy, self.GetViewStart())
             self.sy = event.GetPosition()
@@ -495,7 +496,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             self.SetCharDimensions()
             self.scroller.SetScrollbars(
                 self.fw, self.fh,
-                self.CalcMaxLineLen()+3, max(self.LinesInFile()+1, self.sh),
+                self.max_line_len+3, max(self.lines_in_file+1, self.sh),
                 self.sx, self.sy)
         else:
             print("NOT ADJUSTING SCROLLBARS!")
@@ -514,12 +515,12 @@ class FixedFontDataWindow(wx.ScrolledWindow):
                 wx.Bell()
             else:
                 self.cVert(-1)
-                self.cx = self.CurrentLineLength()
+                self.cx = self.current_line_length
         else:
             self.cx -= 1
 
     def MoveRight(self, event):
-        linelen = self.CurrentLineLength()
+        linelen = self.current_line_length
         if self.cx == linelen:
             if self.cy == len(self.lines) - 1:
                 wx.Bell()
@@ -539,7 +540,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.cx = 0
 
     def MoveEnd(self, event):
-        self.cx = self.CurrentLineLength()
+        self.cx = self.current_line_length
 
     def MoveStartOfFile(self, event):
         self.cy = 0
@@ -547,7 +548,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
     def MoveEndOfFile(self, event):
         self.cy = len(self.lines) - 1
-        self.cx = self.CurrentLineLength()
+        self.cx = self.current_line_length
 
 ##----------- selection routines
 
@@ -590,15 +591,12 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
     #### Overrides
 
-    def CalcMaxLineLen(self):
-        return 64
-
     def DrawCursor(self, dc = None):
         if not dc:
             dc = wx.ClientDC(self)
 
-        if (self.LinesInFile())<self.cy: #-1 ?
-            self.cy = self.LinesInFile()-1
+        if (self.lines_in_file)<self.cy: #-1 ?
+            self.cy = self.lines_in_file-1
         if self.cy > 0:
             s = self.lines[self.cy]
 
@@ -675,6 +673,68 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             for line in range(self.sy, self.sy + self.sh + 1):
                 self.DrawLine(line, line, dc)
             self.DrawCursor(dc)
+
+
+class FixedFontTextWindow(FixedFontDataWindow):
+    @property
+    def current_line_length(self):
+        try:
+            return len(self.lines[self.cy])
+        except IndexError:
+            return 0
+
+    @property
+    def lines_in_file(self):
+        return len(self.lines)
+
+    @property
+    def max_line_len(self):
+        return 64
+
+
+class HexByteImageCache(DrawTextImageCache):
+    def set_size(self, w, h):
+        self.width_padding = 2
+        self.char_width = w
+        self.cell_width = self.char_width * 2 + self.width_padding * 2
+        self.cell_height = h
+
+    def draw_cached_text(self, dc, rect, text, style):
+        k = (text, style, rect.width, rect.height)
+        try:
+            bmp = self.cache[k]
+        except KeyError:
+            bmp = wx.Bitmap(rect.width, rect.height)
+            mdc = wx.MemoryDC()
+            mdc.SelectObject(bmp)
+            t = "%02x" % text
+            r = wx.Rect(self.width_padding, 0, self.char_width * 2, rect.height)
+            self.draw_text_to_dc(mdc, r, t, style)
+            del mdc  # force the bitmap painting by deleting the gc
+            self.cache[k] = bmp
+        dc.DrawBitmap(bmp, rect.x, rect.y)
+
+    def draw_text(self, dc, rect, text, style):
+        print(text, rect)
+        for i, c in enumerate(text):
+            self.draw_cached_text(dc, rect, c, style[i])
+            rect.x += self.cell_width
+
+
+class FixedFontNumpyWindow(FixedFontDataWindow):
+    def __init__(self, *args, **kwargs):
+        FixedFontDataWindow.__init__(self, *args, **kwargs)
+
+    def setup_metadata(self):
+        print(self.lines, self.lines.shape, type(self.lines.shape))
+        c, self.lines_in_file = self.lines.shape
+        self.current_line_length = c
+        self.max_line_len = c
+
+    def init_renderer(self):
+        self.text_renderer = HexByteImageCache(self.settings_obj, self.font, self.fw, self.fh)
+        self.fw = self.text_renderer.cell_width
+        self.fh = self.text_renderer.cell_height
 
 
 if __name__ == "__main__":
