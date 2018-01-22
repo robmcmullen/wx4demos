@@ -387,7 +387,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def HandleRightOfScreen(self, col):
         self.SetScrollTimer()
         if self.CanScroll():
-            col = self.sx + self.sw
+            col = self.sx + self.sw + 1
             col = min(col, self.CurrentLineLength())
             self.cx = col
 
