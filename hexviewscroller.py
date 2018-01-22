@@ -132,6 +132,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.set_pane_sizes(3000, 1000)
         self.SetBackgroundColour(self.col_header_bg_color)
         #self.SetScrollRate(20,20)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)
         self.Bind(wx.EVT_SCROLLWIN, self.on_scroll_window)
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
 
@@ -202,6 +203,16 @@ class HexGridWindow(wx.ScrolledWindow):
         elif eventType == wx.wxEVT_SCROLLWIN_BOTTOM:
             self.main.sy = self.main.LinesInFile() - self.main.sh
             self.main.cy = self.main.LinesInFile()
+        elif eventType == wx.wxEVT_MOUSEWHEEL:
+            # Not a normal scroll event. Wheel scrolling is handled by the
+            # scrolled window by a wxEVT_SCROLLWIN_THUMBTRACK, but on GTK its
+            # internal value didn't match the scrollbar so it was getting
+            # repositioned. This value is only received through the call to
+            # on_mouse_wheel below.
+            if event < 0:
+                self.main.sy += 4
+            else:
+                self.main.sy -= 4
         else:
             self.main.sy = event.GetPosition()
 
@@ -215,6 +226,19 @@ class HexGridWindow(wx.ScrolledWindow):
         else:
             self.VertScroll(event, eventType)
         self.main.UpdateView()
+
+    def on_mouse_wheel(self, evt):
+        w = evt.GetWheelRotation()
+        if evt.ControlDown():
+            if w < 0:
+                self.main.zoom_out()
+            elif w > 0:
+                self.main.zoom_in()
+        elif not evt.ShiftDown() and not evt.AltDown():
+            self.VertScroll(w, wx.wxEVT_MOUSEWHEEL)
+            self.main.UpdateView()
+        else:
+            evt.Skip()
 
     def update_dependents_null(self):
         pass

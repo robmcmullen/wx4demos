@@ -175,7 +175,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMotion)
-        self.Bind(wx.EVT_SCROLLWIN, self.OnScroll)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.settings_obj.on_mouse_wheel)
+        self.Bind(wx.EVT_SCROLLWIN, self.settings_obj.on_scroll_window)
         #self.Bind(wx.EVT_CHAR, self.OnChar)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -484,19 +485,10 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             self.sy = self.LinesInFile() - self.sh
             self.cy = self.LinesInFile()
         else:
+            print("Position:", event.GetPosition(), "old:", self.sy, self.GetViewStart())
             self.sy = event.GetPosition()
 
         self.VertBoundaries()
-
-    def OnScroll(self, event):
-        dir = event.GetOrientation()
-        eventType = event.GetEventType()
-        if dir == wx.HORIZONTAL:
-            self.HorizScroll(event, eventType)
-        else:
-            self.VertScroll(event, eventType)
-        self.UpdateView()
-
 
     def AdjustScrollbars(self):
         if self:
@@ -588,6 +580,12 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         pass
 
     def SelectNotify(self, Selecting, SelectionBegin, SelectionEnd):
+        pass
+
+    def zoom_in(self):
+        pass
+
+    def zoom_out(self):
         pass
 
     #### Overrides
