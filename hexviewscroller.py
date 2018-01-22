@@ -69,7 +69,7 @@ class AuxWindow(wx.ScrolledWindow):
         dc = wx.BufferedDC(odc)
         s = self.scroll_source
         if dc.IsOk():
-            dc.SetFont(s.font)
+            dc.SetFont(s.settings_obj.text_font)
             dc.SetBackgroundMode(wx.SOLID)
             dc.SetTextBackground(s.settings_obj.row_header_bg_color)
             dc.SetTextForeground(s.settings_obj.text_color)
@@ -93,7 +93,7 @@ class AuxWindow(wx.ScrolledWindow):
         dc = wx.BufferedDC(odc)
         s = self.scroll_source
         if dc.IsOk():
-            dc.SetFont(s.font)
+            dc.SetFont(s.settings_obj.text_font)
             dc.SetBackgroundMode(wx.SOLID)
             dc.SetTextBackground(s.settings_obj.col_header_bg_color)
             dc.SetTextForeground(s.settings_obj.text_color)
@@ -120,10 +120,14 @@ class HexGridWindow(wx.ScrolledWindow):
         self.highlight_color = wx.Colour(100, 200, 230)
         self.unfocused_cursor_color = (128, 128, 128)
         self.data_color = (224, 224, 224)
+        attr = self.GetDefaultAttributes()
+        self.empty_color = attr.colBg.Get(False)
         self.match_background_color = (255, 255, 180)
         self.comment_background_color = (255, 180, 200)
         self.diff_text_color = (255, 0, 0)
         self.scroll_delay = 30  # milliseconds
+
+        self.text_font = self.NiceFontForPlatform()
 
         self.update_dependents = self.update_dependents_null
         self.main = hexview.FixedFontNumpyWindow(self, self, np.zeros([0, 0], dtype=np.uint8))
@@ -150,6 +154,21 @@ class HexGridWindow(wx.ScrolledWindow):
         self.top.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
         self.left.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
         self.update_dependents = self.update_dependents_post_init
+
+    def NiceFontForPlatform(self):
+        point_size = 10
+        family = wx.DEFAULT
+        style = wx.NORMAL
+        weight = wx.NORMAL
+        underline = False
+        if wx.Platform == "__WXMAC__":
+            face_name = "Monaco"
+        elif wx.Platform == "__WXMSW__":
+            face_name = "Lucida Console"
+        else:
+            face_name = "monospace"
+        font = wx.Font(point_size, family, style, weight, underline, face_name)
+        return font
 
     def on_left_up(self, event):
         print

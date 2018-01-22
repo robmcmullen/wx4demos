@@ -190,23 +190,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
 
-##------------------- Platform-specific stuff
-
-    def NiceFontForPlatform(self):
-        point_size = 10
-        family = wx.DEFAULT
-        style = wx.NORMAL
-        weight = wx.NORMAL
-        underline = False
-        if wx.Platform == "__WXMAC__":
-            face_name = "Monaco"
-        elif wx.Platform == "__WXMSW__":
-            face_name = "Lucida Console"
-        else:
-            face_name = "monospace"
-        font = wx.Font(point_size, family, style, weight, underline, face_name)
-        return font
-
 ##-------------------- UpdateView/Cursor code
 
     def OnSize(self, event):
@@ -262,8 +245,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
     def InitFonts(self):
         dc = wx.ClientDC(self)
-        self.font = self.NiceFontForPlatform()
-        dc.SetFont(self.font)
+        dc.SetFont(self.settings_obj.text_font)
         self.fw = dc.GetCharWidth()
         self.fh = dc.GetCharHeight()
         self.text_renderer = self.create_renderer()
@@ -271,7 +253,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.cell_height = self.fh + self.settings_obj.row_height_extra_padding
 
     def create_renderer(self):
-        return DrawTextImageCache(self.settings_obj, self.font, self.fw, self.fh)
+        return DrawTextImageCache(self.settings_obj, None, self.fw, self.fh)
 
     def InitDoubleBuffering(self):
         pass
@@ -574,10 +556,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def OnDestroy(self, event):
         self.mdc = None
         self.odc = None
-        self.settings_obj.background_color = None
-        self.settings_obj.text_color = None
-        self.font = None
-        self.settings_obj.highlight_color = None
         self.scrollTimer = None
         self.eofMarker = None
 
@@ -670,11 +648,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
         dc = wx.BufferedDC(odc)
         if dc.IsOk():
-            dc.SetFont(self.font)
             dc.SetBackgroundMode(wx.SOLID)
-            dc.SetTextBackground(self.settings_obj.background_color)
-            dc.SetTextForeground(self.settings_obj.text_color)
-            dc.SetBackground(wx.Brush(self.settings_obj.background_color))
+            dc.SetBackground(wx.Brush(self.settings_obj.empty_color))
             dc.Clear()
             for line in range(self.sy, self.sy + self.sh + 1):
                 self.DrawLine(line, line, dc)
@@ -741,7 +716,7 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
         self.max_line_len = c
 
     def create_renderer(self):
-        return HexByteImageCache(self.settings_obj, self.font, self.fw, self.fh)
+        return HexByteImageCache(self.settings_obj, None, self.fw, self.fh)
 
     def DrawLine(self, sy, line, dc):
         if self.IsLine(line):
