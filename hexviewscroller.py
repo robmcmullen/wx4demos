@@ -54,7 +54,7 @@ class AuxWindow(wx.ScrolledWindow):
 
     def DrawEditText(self, t, x, y, dc):
         s = self.scroll_source
-        dc.DrawText(t, x * s.fw, y * s.fh)
+        dc.DrawText(t, x * s.fw, y * s.cell_height)
 
     def DrawLine(self, t, line, dc):
         s = self.scroll_source

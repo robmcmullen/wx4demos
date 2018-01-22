@@ -219,18 +219,18 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.bw, self.bh = self.GetClientSize()
 
         if wx.Platform == "__WXMSW__":
-            self.sh = int(self.bh / self.fh)
-            self.sw = int(self.bw / self.fw) - 1
+            self.sh = int(self.bh / self.cell_height)
+            self.sw = int(self.bw / self.cell_width) - 1
         else:
-            self.sh = int(self.bh / self.fh)
+            self.sh = int(self.bh / self.cell_height)
             if self.lines_in_file >= self.sh:
                 self.bw = self.bw - wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
-                self.sw = int(self.bw / self.fw) - 1
+                self.sw = int(self.bw / self.cell_width) - 1
 
-            self.sw = int(self.bw / self.fw) - 1
+            self.sw = int(self.bw / self.cell_width) - 1
             if self.max_line_len >= self.sw:
                 self.bh = self.bh - wx.SystemSettings.GetMetric(wx.SYS_HSCROLL_Y)
-                self.sh = int(self.bh / self.fh)
+                self.sh = int(self.bh / self.cell_height)
 
     def UpdateView(self, dc = None):
         if dc is None:
@@ -265,11 +265,13 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.font = self.NiceFontForPlatform()
         dc.SetFont(self.font)
         self.fw = dc.GetCharWidth()
-        self.fh = dc.GetCharHeight() + self.settings_obj.row_height_extra_padding
-        self.init_renderer()
+        self.fh = dc.GetCharHeight()
+        self.text_renderer = self.create_renderer()
+        self.cell_width = self.text_renderer.cell_width
+        self.cell_height = self.fh + self.settings_obj.row_height_extra_padding
 
-    def init_renderer(self):
-        self.text_renderer = DrawTextImageCache(self.settings_obj, self.font, self.fw, self.fh)
+    def create_renderer(self):
+        return DrawTextImageCache(self.settings_obj, self.font, self.fw, self.fh)
 
     def InitDoubleBuffering(self):
         pass
@@ -403,7 +405,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 ##------------------------ mousing functions
 
     def MouseToRow(self, mouseY):
-        row  = self.sy + int(mouseY / self.fh)
+        row  = self.sy + int(mouseY / self.cell_height)
         if self.AboveScreen(row):
             self.HandleAboveScreen(row)
         elif self.BelowScreen(row):
@@ -412,7 +414,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             self.cy  = min(row, self.lines_in_file - 1)
 
     def MouseToCol(self, mouseX):
-        col = self.sx + int(mouseX / self.fw)
+        col = self.sx + int(mouseX / self.cell_width)
         if self.LeftOfScreen(col):
             self.HandleLeftOfScreen(col)
         elif self.RightOfScreen(col):
@@ -499,7 +501,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if self:
             self.SetCharDimensions()
             self.scroller.SetScrollbars(
-                self.fw, self.fh,
+                self.cell_width, self.cell_height,
                 self.max_line_len+3, max(self.lines_in_file+1, self.sh),
                 self.sx, self.sy)
         else:
@@ -616,8 +618,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             xp = self.sco_x
             yp = self.sco_y
 
-        szx = self.fw
-        szy = self.fh
+        szx = self.cell_width
+        szy = self.cell_height
         x = xp * szx
         y = yp * szy
         dc.Blit(x,y, szx,szy, dc, x,y, wx.XOR)
@@ -625,8 +627,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.sco_y = yp
 
     def DrawEditText(self, t, style, x, y, dc):
-        #dc.DrawText(t, x * self.fw, y * self.fh)
-        rect = wx.Rect(x * self.fw, y * self.fh, len(t) * self.fw, self.fh)
+        #dc.DrawText(t, x * self.cell_width, y * self.cell_height)
+        rect = wx.Rect(x * self.cell_width, y * self.cell_height, len(t) * self.cell_width, self.cell_height)
         self.text_renderer.draw_text(dc, rect, t, style)
 
     def get_style_array(self, text, line):
@@ -738,10 +740,8 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
         self.current_line_length = c
         self.max_line_len = c
 
-    def init_renderer(self):
-        self.text_renderer = HexByteImageCache(self.settings_obj, self.font, self.fw, self.fh)
-        self.fw = self.text_renderer.cell_width
-        self.fh = self.text_renderer.cell_height
+    def create_renderer(self):
+        return HexByteImageCache(self.settings_obj, self.font, self.fw, self.fh)
 
     def DrawLine(self, sy, line, dc):
         if self.IsLine(line):
