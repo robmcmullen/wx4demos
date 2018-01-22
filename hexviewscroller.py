@@ -21,7 +21,8 @@ class AuxWindow(wx.ScrolledWindow):
         else:
             self.Draw = self.DrawVert
         #             "0A 0X 0Y FF sv-bdizc  00 00 00 LDA $%04x"
-        self.header = " A  X  Y SP sv-bdizc  Opcodes  Assembly"
+        #self.header = " A  X  Y SP sv-bdizc  Opcodes  Assembly"
+        self.header = ["%x" % x for x in range(16)]
         self.isDrawing = False
         self.EnableScrolling(False, False)
         self.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
@@ -52,17 +53,14 @@ class AuxWindow(wx.ScrolledWindow):
     def OnEraseBackground(self, evt):
         pass
 
-    def DrawEditText(self, t, x, y, dc):
-        s = self.scroll_source
-        dc.DrawText(t, x * s.fw, y * s.cell_height)
-
-    def DrawLine(self, t, line, dc):
-        s = self.scroll_source
-        self.DrawEditText(t, 0, line - s.sy, dc)
-
     @property
     def row_label_char_size(self):
         return 4
+
+    def DrawVertText(self, t, line, dc):
+        s = self.scroll_source
+        y = (line - s.sy) * s.cell_height
+        dc.DrawText(t, 0, y)
 
     def DrawVert(self, odc=None):
         if not odc:
@@ -79,7 +77,14 @@ class AuxWindow(wx.ScrolledWindow):
             dc.Clear()
             for line in range(s.sy, s.sy + s.sh + 1):
                 if s.IsLine(line):
-                    self.DrawLine("%04x" % line, line, dc)
+                    self.DrawVertText("%04x" % line, line, dc)
+
+    def DrawHorzText(self, t, sx, dc):
+        s = self.scroll_source
+        x = (sx - s.sx) * s.cell_width
+        width = len(t) * s.fw
+        offset = (s.cell_width - width)/2  # center text in cell
+        dc.DrawText(t, x + offset, 0)
 
     def DrawHorz(self, odc=None):
         if not odc:
@@ -94,9 +99,10 @@ class AuxWindow(wx.ScrolledWindow):
             dc.SetTextForeground(s.settings_obj.text_color)
             dc.SetBackground(wx.Brush(s.settings_obj.col_header_bg_color))
             dc.Clear()
-            line = self.header[s.sx:]
-            self.DrawLine(line, s.sy, dc)
-
+            sx = s.sx
+            for header in self.header[s.sx:]:
+                self.DrawHorzText(header, sx, dc)
+                sx += 1
 
 
 class HexGridWindow(wx.ScrolledWindow):
@@ -160,7 +166,7 @@ class HexGridWindow(wx.ScrolledWindow):
             - top = width, 40
             - left = 80, height
         """
-        top_height = self.main.fh + self.col_label_border_width
+        top_height = self.main.cell_height + self.col_label_border_width
         left_width = self.left.row_label_char_size * self.main.fw + self.row_label_border_width
         self.main.SetVirtualSize(wx.Size(width,height))
         #(wt, ht) = self.top.GetSize()
