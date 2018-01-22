@@ -29,6 +29,7 @@ class AuxWindow(wx.ScrolledWindow):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.scroll_source.settings_obj.on_mouse_wheel)
 
     def OnSize(self, event):
         self.AdjustScrollbars()
