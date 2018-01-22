@@ -158,7 +158,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.InitScrolling(parent)
         self.SelectOff()
         self.SetFocus()
-        self.SetText(data)
+        self.set_data(data, 0, 16)
         self.SpacesPerTab = 4
 
 ##------------------ Init stuff
@@ -299,14 +299,14 @@ class FixedFontDataWindow(wx.ScrolledWindow):
     def GetText(self):
         return self.lines
 
-    def SetText(self, lines):
+    def set_data(self, lines, *args, **kwargs):
         self.InitCoords()
         self.lines = lines
-        self.setup_metadata()
+        self.setup_metadata(*args, **kwargs)
         self.AdjustScrollbars()
         self.UpdateView(None)
 
-    def setup_metadata(self):
+    def setup_metadata(self, *args, **kwargs):
         pass
 
     def IsLine(self, lineNum):
@@ -349,7 +349,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         x, y = self.ScreenToClient((screenX, screenY))
         self.MouseToRow(y)
         self.MouseToCol(x)
-        self.SelectUpdate()
+        self.update_selection()
 
 ##-------------------------- Mouse off screen functions
 
@@ -409,12 +409,11 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if event.LeftIsDown() and self.HasCapture():
             self.Selecting = True
             self.MouseToCursor(event)
-            self.SelectUpdate()
+            self.update_selection()
 
     def OnLeftDown(self, event):
         self.MouseToCursor(event)
-        self.SelectBegin = (self.cy, self.cx)
-        self.SelectEnd = None
+        self.start_selection()
         self.UpdateView()
         self.CaptureMouse()
         self.SetFocus()
@@ -537,7 +536,11 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
 ##----------- selection routines
 
-    def SelectUpdate(self):
+    def start_selection(self):
+        self.SelectBegin = (self.cy, self.cx)
+        self.SelectEnd = None
+
+    def update_selection(self):
         self.SelectEnd = (self.cy, self.cx)
         self.SelectNotify(self.Selecting, self.SelectBegin, self.SelectEnd)
         self.UpdateView()
@@ -718,22 +721,64 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
     def __init__(self, *args, **kwargs):
         FixedFontDataWindow.__init__(self, *args, **kwargs)
 
-    def setup_metadata(self):
-        print(self.lines, self.lines.shape, type(self.lines.shape))
-        self.lines_in_file, c = self.lines.shape
-        self.current_line_length = c
-        self.max_line_len = c
+    def setup_metadata(self, start_addr, bytes_per_row, *args, **kwargs):
+        self.start_addr = start_addr
+        self.bytes_per_row = bytes_per_row
+        self.start_offset = start_addr & 0x0f
+        self.label_start_addr = (start_addr // bytes_per_row) * bytes_per_row
+        self.lines_in_file = ((self.start_offset + len(self.lines) - 1) / bytes_per_row) + 1
+        self.last_valid_index = len(self.lines)
+        print(self.lines, self.lines_in_file, self.start_offset, self.start_addr)
+        self.current_line_length = bytes_per_row
+        self.max_line_len = bytes_per_row
 
     def create_renderer(self):
         return HexByteImageCache(self.settings_obj, None, self.fw, self.fh)
 
+    def get_index_range(self, row, col):
+        """Get the byte offset from start of file given row, col
+        position.
+        """
+        index = row * self.bytes_per_row + col - self.start_offset
+        return index, index + 1
+
+    def start_selection(self):
+        self.SelectBegin, self.SelectEnd = self.get_index_range(self.cy, self.cx)
+
+    def update_selection(self):
+        _, self.SelectEnd = self.get_index_range(self.cy, self.cx)
+        self.SelectNotify(self.Selecting, self.SelectBegin, self.SelectEnd)
+        self.UpdateView()
+
+    def get_style_array(self, index, last_index):
+        count = last_index - index
+        style = np.zeros(count, dtype=np.uint8)
+        if last_index < self.SelectBegin or index >= self.SelectEnd:
+            pass
+        else:
+            for i in range(index, last_index):
+                if i >= self.SelectBegin and i < self.SelectEnd:
+                    style[i - index] = selected_bit_mask
+        return style
+
     def DrawLine(self, sy, line, dc):
         if self.IsLine(line):
-            d = self.lines[line,self.sx:]
-            style = self.get_style_array(d, line)
-            # t   = t[self.sx:]
-            # style = style[self.sx:]
-            self.DrawEditText(d, style, 0, sy - self.sy, dc)
+            if line == 0:
+                index = 0
+                cell_start = self.start_offset
+            else:
+                index = (line * self.bytes_per_row) - self.start_offset
+                cell_start = 0
+            if line == self.lines_in_file - 1:
+                last_index = self.last_valid_index
+                cell_end = last_index - index
+            else:
+                cell_end = self.bytes_per_row - cell_start
+                last_index = index + cell_end
+
+            d = self.lines[index:last_index]
+            style = self.get_style_array(index, last_index)
+            self.DrawEditText(d, style, cell_start, sy - self.sy, dc)
 
 
 if __name__ == "__main__":

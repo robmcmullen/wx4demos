@@ -275,8 +275,8 @@ class HexGridWindow(wx.ScrolledWindow):
         self.top.UpdateView()
         self.left.UpdateView()
 
-    def set_data(self, data):
-        self.main.SetText(data)
+    def set_data(self, data, *args, **kwargs):
+        self.main.set_data(data, *args, **kwargs)
 
 
 class MyApp(wx.App):
@@ -294,7 +294,7 @@ class MyApp(wx.App):
         frame = wx.Frame(None, id, "Test Text Grid" )
         scroll = HexGridWindow(frame, wx.NewId())
         #scroll.set_data(hexview.FakeList(1000))
-        scroll.set_data(np.arange(1024, dtype=np.uint8).reshape((-1,16)))
+        scroll.set_data(np.arange(1024, dtype=np.uint8), 0x604, 16)
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()
