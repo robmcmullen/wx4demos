@@ -750,6 +750,21 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
         self.SelectNotify(self.Selecting, self.SelectBegin, self.SelectEnd)
         self.UpdateView()
 
+    def MouseToCol(self, mouseX):
+        col = self.sx + int(mouseX / self.cell_width)
+        if self.LeftOfScreen(col):
+            self.HandleLeftOfScreen(col)
+        elif self.RightOfScreen(col):
+            self.HandleRightOfScreen(col)
+        else:
+            self.cx = min(col, self.current_line_length)
+        # MouseToRow must be called first so the cursor is in the correct row
+        index, _ = self.get_index_range(self.cy, self.cx)
+        if index < 0:
+            self.cx = self.start_offset
+        elif index >= self.last_valid_index:
+            self.cx = self.start_offset - 1
+
     def get_style_array(self, index, last_index):
         count = last_index - index
         style = np.zeros(count, dtype=np.uint8)
