@@ -603,7 +603,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             yp = self.sco_y
 
         w = self.cell_width + 2
-        h = self.cell_height + 2
+        h = self.cell_height + 1
         x = (xp * self.cell_width) - 1
         y = (yp * self.cell_height)
         dc.SetPen(self.settings_obj.cursor_pen)
