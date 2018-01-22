@@ -141,7 +141,7 @@ class DrawTextImageCache(object):
 
 
 class FixedFontDataWindow(wx.ScrolledWindow):
-    def __init__(self, parent, settings_obj, num_lines):
+    def __init__(self, parent, settings_obj, data):
 
         wx.ScrolledWindow.__init__(self, parent, -1, style=wx.WANTS_CHARS)
 
@@ -154,7 +154,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.InitScrolling(parent)
         self.SelectOff()
         self.SetFocus()
-        self.SetText(FakeList(num_lines))
+        self.SetText(data)
         self.SpacesPerTab = 4
 
 ##------------------ Init stuff
@@ -322,7 +322,10 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         return ""
 
     def CurrentLineLength(self):
-        return len(self.lines[self.cy])
+        try:
+            return len(self.lines[self.cy])
+        except IndexError:
+            return 0
 
     def LinesInFile(self):
         return len(self.lines)
@@ -598,11 +601,12 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
         if (self.LinesInFile())<self.cy: #-1 ?
             self.cy = self.LinesInFile()-1
-        s = self.lines[self.cy]
+        if self.cy > 0:
+            s = self.lines[self.cy]
 
-        x = self.cx - self.sx
-        y = self.cy - self.sy
-        self.DrawSimpleCursor(x, y, dc)
+            x = self.cx - self.sx
+            y = self.cy - self.sy
+            self.DrawSimpleCursor(x, y, dc)
 
     def DrawSimpleCursor(self, xp, yp, dc = None, old=False):
         if not dc:

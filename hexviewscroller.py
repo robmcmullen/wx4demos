@@ -117,7 +117,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.scroll_delay = 30  # milliseconds
 
         self.update_dependents = self.update_dependents_null
-        self.main = hexview.FixedFontDataWindow(self, self, 1000)
+        self.main = hexview.FixedFontDataWindow(self, self, [])
         self.top = AuxWindow(self, self.main, True, False)
         self.left = AuxWindow(self, self.main, False, True)
         sizer = wx.FlexGridSizer(2,2,0,0)
@@ -223,6 +223,9 @@ class HexGridWindow(wx.ScrolledWindow):
         self.top.UpdateView()
         self.left.UpdateView()
 
+    def set_data(self, data):
+        self.main.SetText(data)
+
 
 class MyApp(wx.App):
     """
@@ -238,6 +241,7 @@ class MyApp(wx.App):
         id = wx.NewId()
         frame = wx.Frame(None, id, "Test Text Grid" )
         scroll = HexGridWindow(frame, wx.NewId())
+        scroll.set_data(hexview.FakeList(1000))
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()
