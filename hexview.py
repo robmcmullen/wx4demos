@@ -758,9 +758,16 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
 
     def start_selection(self):
         self.SelectBegin, self.SelectEnd = self.get_index_range(self.cy, self.cx)
+        self.anchor_start_index, self.anchor_end_index = self.SelectBegin, self.SelectEnd
 
     def update_selection(self):
-        _, self.SelectEnd = self.get_index_range(self.cy, self.cx)
+        index1, index2 = self.get_index_range(self.cy, self.cx)
+        if index1 < self.anchor_start_index:
+            self.SelectBegin = index1
+            self.SelectEnd = self.anchor_end_index
+        elif index2 > self.anchor_end_index:
+            self.SelectBegin = self.anchor_start_index
+            self.SelectEnd = index2
         self.SelectNotify(self.Selecting, self.SelectBegin, self.SelectEnd)
         self.UpdateView()
 
