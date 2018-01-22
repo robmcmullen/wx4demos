@@ -69,7 +69,7 @@ class AuxWindow(wx.ScrolledWindow):
         dc = wx.BufferedDC(odc)
         s = self.scroll_source
         if dc.IsOk():
-            dc.SetFont(s.settings_obj.text_font)
+            dc.SetFont(s.settings_obj.header_font)
             dc.SetBackgroundMode(wx.SOLID)
             dc.SetTextBackground(s.settings_obj.row_header_bg_color)
             dc.SetTextForeground(s.settings_obj.text_color)
@@ -77,7 +77,7 @@ class AuxWindow(wx.ScrolledWindow):
             dc.Clear()
             for line in range(s.sy, s.sy + s.sh + 1):
                 if s.IsLine(line):
-                    self.DrawVertText("%04x" % line, line, dc)
+                    self.DrawVertText("%04x" % (line * 16), line, dc)
 
     def DrawHorzText(self, t, sx, dc):
         s = self.scroll_source
@@ -93,7 +93,7 @@ class AuxWindow(wx.ScrolledWindow):
         dc = wx.BufferedDC(odc)
         s = self.scroll_source
         if dc.IsOk():
-            dc.SetFont(s.settings_obj.text_font)
+            dc.SetFont(s.settings_obj.header_font)
             dc.SetBackgroundMode(wx.SOLID)
             dc.SetTextBackground(s.settings_obj.col_header_bg_color)
             dc.SetTextForeground(s.settings_obj.text_color)
@@ -128,6 +128,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.scroll_delay = 30  # milliseconds
 
         self.text_font = self.NiceFontForPlatform()
+        self.header_font = wx.Font(self.text_font).MakeBold()
 
         self.update_dependents = self.update_dependents_null
         self.main = hexview.FixedFontNumpyWindow(self, self, np.zeros([0, 0], dtype=np.uint8))
