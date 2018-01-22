@@ -257,9 +257,13 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
 ##-------- Enforcing screen boundaries, cursor movement
 
+    def enforce_valid_cursor(self):
+        pass
+
     def KeepCursorOnScreen(self):
         self.sy = ForceBetween(max(0, self.cy-self.sh), self.sy, self.cy)
         self.sx = ForceBetween(max(0, self.cx-self.sw), self.sx, self.cx)
+        self.enforce_valid_cursor()
         self.AdjustScrollbars()
 
     def HorizBoundaries(self):
@@ -276,11 +280,13 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.cy = ForceBetween(0, self.cy, self.lines_in_file - 1)
         self.sy = ForceBetween(self.cy - self.sh + 1, self.sy, self.cy)
         self.cx = min(self.cx, self.current_line_length - 1)
+        self.enforce_valid_cursor()
 
     def cHoriz(self, num):
         self.cx = self.cx + num
         self.cx = ForceBetween(0, self.cx, self.current_line_length - 1)
         self.sx = ForceBetween(self.cx - self.sw + 1, self.sx, self.cx)
+        self.enforce_valid_cursor()
 
     def AboveScreen(self, row):
         return row < self.sy
@@ -303,6 +309,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.InitCoords()
         self.lines = lines
         self.setup_metadata(*args, **kwargs)
+        self.enforce_valid_cursor()
         self.AdjustScrollbars()
         self.UpdateView(None)
 
@@ -742,6 +749,13 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
         index = row * self.bytes_per_row + col - self.start_offset
         return index, index + 1
 
+    def enforce_valid_cursor(self):
+        index, _ = self.get_index_range(self.cy, self.cx)
+        if index < 0:
+            self.cx = self.start_offset
+        elif index >= self.last_valid_index:
+            self.cx = self.start_offset - 1
+
     def start_selection(self):
         self.SelectBegin, self.SelectEnd = self.get_index_range(self.cy, self.cx)
 
@@ -759,11 +773,7 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
         else:
             self.cx = min(col, self.current_line_length)
         # MouseToRow must be called first so the cursor is in the correct row
-        index, _ = self.get_index_range(self.cy, self.cx)
-        if index < 0:
-            self.cx = self.start_offset
-        elif index >= self.last_valid_index:
-            self.cx = self.start_offset - 1
+        self.enforce_valid_cursor()
 
     def get_style_array(self, index, last_index):
         count = last_index - index
