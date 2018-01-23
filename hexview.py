@@ -831,7 +831,7 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
 
             d = self.lines[index:last_index]
             style = self.get_style_array(index, last_index)
-            self.DrawEditText(d, style, cell_start, sy - self.sy, dc)
+            self.DrawEditText(d, style, cell_start - self.sx, sy - self.sy, dc)
 
 
 if __name__ == "__main__":
