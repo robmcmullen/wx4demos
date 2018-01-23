@@ -172,8 +172,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.sy = 0
         self.sw = 0
         self.sh = 0
-        self.sco_x = 0
-        self.sco_y = 0
 
     def MapEvents(self):
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
@@ -618,15 +616,17 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if not dc:
             dc = wx.ClientDC(self)
 
-        dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        if old:
-            xp = self.sco_x
-            yp = self.sco_y
-
         w = self.cell_width + 2
         h = self.cell_height + 1
         x = (xp * self.cell_width) - 1
         y = (yp * self.cell_height)
+        self.draw_caret(dc, x, y, w, h)
+
+    def draw_caret(self, dc, x, y, w, h):
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        w += 2
+        h += 1
+        x -= 1
         dc.SetPen(self.settings_obj.cursor_pen)
         dc.DrawRectangle(x, y, w, h)
         x -= 1
@@ -641,8 +641,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         h += 2
         dc.SetPen(self.settings_obj.cursor_pen)
         dc.DrawRectangle(x, y, w, h)
-        self.sco_x = xp
-        self.sco_y = yp
 
     def DrawEditText(self, t, style, x, y, dc):
         #dc.DrawText(t, x * self.cell_width, y * self.cell_height)
@@ -736,13 +734,13 @@ class HexByteImageCache(DrawTextImageCache):
             self.cache[k] = bmp
         dc.DrawBitmap(bmp, rect.x, rect.y)
 
-    def draw_text(self, dc, rect, text, style):
+    def draw_text(self, dc, rect, text, style, num_cells=1):
         print(rect, text)
-        rect.width = self.cell_width
+        rect.width = num_cells * self.cell_width
         for i, c in enumerate(text):
             print(i, c, rect)
             self.draw_cached_text(dc, rect, c, style[i])
-            rect.x += self.cell_width
+            rect.x += rect.width
 
 
 class FixedFontNumpyWindow(FixedFontDataWindow):
@@ -832,6 +830,112 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
             d = self.lines[index:last_index]
             style = self.get_style_array(index, last_index)
             self.DrawEditText(d, style, cell_start - self.sx, sy - self.sy, dc)
+
+
+class FixedFontMultiCellNumpyWindow(FixedFontNumpyWindow):
+    def setup_metadata(self, start_addr, items_per_row, col_widths=None, *args, **kwargs):
+        self.start_addr = start_addr
+        if col_widths is None:
+            col_widths = [1] * items_per_row
+        self.calc_cells(items_per_row, col_widths)
+        self.start_offset = 0  # no partial rows!
+        self.label_start_addr = (start_addr // items_per_row) * items_per_row
+        self.lines_in_file = int((len(self.lines) - 1) / items_per_row) + 1
+        self.last_valid_index = len(self.lines) - 1
+
+    def calc_cells(self, items_per_row, col_widths):
+        """
+        :param items_per_row: number of entries in each line of the array
+        :param col_widths: array, entry containing the number of cells (width)
+            required to display that items in that column
+        """
+        self.items_per_row = items_per_row
+        self.col_widths = tuple(col_widths)  # copy to prevent possible weird errors if parent modifies list!
+        self.total_cell_width = reduce(lambda x,y: x + y, col_widths)
+        self.cell_to_col = []
+        self.col_to_cell = []
+        pos = 0
+        for i, width in enumerate(col_widths):
+            self.col_to_cell.append(pos)
+            self.cell_to_col.extend([i] * width)
+            pos += width
+        self.current_line_length = pos
+        self.max_line_len = pos
+
+    def get_index_range(self, row, cell):
+        """Get the byte offset from start of file given row, col
+        position.
+        """
+        index = row * self.items_per_row
+        index += self.cell_to_col[cell]
+        return index, index + 1
+
+    def enforce_valid_cursor(self):
+        if self.cx >= self.total_cell_width:
+            self.cx = self.total_cell_width - 1
+        index, _ = self.get_index_range(self.cy, self.cx)
+        if index < 0:
+            self.cx = 0
+        elif index >= self.last_valid_index:
+            self.cx = self.total_cell_width - 1
+
+    def start_selection(self):
+        self.SelectBegin, self.SelectEnd = self.get_index_range(self.cy, self.cx)
+        self.anchor_start_index, self.anchor_end_index = self.SelectBegin, self.SelectEnd
+
+    def update_selection(self):
+        index1, index2 = self.get_index_range(self.cy, self.cx)
+        if index1 < self.anchor_start_index:
+            self.SelectBegin = index1
+            self.SelectEnd = self.anchor_end_index
+        elif index2 > self.anchor_end_index:
+            self.SelectBegin = self.anchor_start_index
+            self.SelectEnd = index2
+        self.SelectNotify(self.Selecting, self.SelectBegin, self.SelectEnd)
+        self.UpdateView()
+
+    def MouseToCol(self, mouseX):
+        cell = self.sx + int(mouseX / self.cell_width)
+        if self.LeftOfScreen(cell):
+            self.HandleLeftOfScreen(cell)
+        elif self.RightOfScreen(cell):
+            self.HandleRightOfScreen(cell)
+        else:
+            self.cx = min(cell, self.current_line_length)
+        # MouseToRow must be called first so the cursor is in the correct row
+        self.enforce_valid_cursor()
+
+    def DrawSimpleCursor(self, cell_x, cell_y, dc = None, old=False):
+        if not dc:
+            dc = wx.ClientDC(self)
+
+        col = self.cell_to_col[cell_x]
+        num_cells = self.col_widths[col]
+        w = (num_cells * self.cell_width) + 2
+        h = self.cell_height + 1
+        cell_x = self.col_to_cell[col]
+        x = (cell_x * self.cell_width) - 1
+        y = (cell_y * self.cell_height)
+        self.draw_caret(dc, x, y, w, h)
+
+    def DrawEditText(self, t, style, start_x, show_at_x, x_width, y, dc):
+        #dc.DrawText(t, x * self.cell_width, y * self.cell_height)
+        print("DRAWEDIT: ", start_x, show_at_x, x_width)
+        rect = wx.Rect(show_at_x * self.cell_width, y * self.cell_height, x_width * self.cell_width, self.cell_height)
+        self.text_renderer.draw_text(dc, rect, [t], [style], x_width)
+
+    def DrawLine(self, sy, line, dc):
+        if self.IsLine(line):
+            # import pdb; pdb.set_trace()
+            start_col = self.cell_to_col[self.sx]
+            index = line * self.items_per_row
+            last_index = (line + 1) * self.items_per_row
+            data = self.lines[index:last_index]
+            style = self.get_style_array(index, last_index)
+            for col in range(start_col, self.items_per_row):
+                cell_start = self.col_to_cell[col]
+                cell_width = self.col_widths[col]
+                self.DrawEditText(data[col], style[col], cell_start, cell_start - self.sx, cell_width, sy - self.sy, dc)
 
 
 if __name__ == "__main__":

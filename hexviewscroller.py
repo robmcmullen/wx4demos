@@ -106,7 +106,7 @@ class AuxWindow(wx.ScrolledWindow):
 
 
 class HexGridWindow(wx.ScrolledWindow):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, grid_cls, *args, **kwargs):
         wx.ScrolledWindow.__init__ (self, *args, **kwargs)
         self.SetAutoLayout(True)
 
@@ -132,7 +132,7 @@ class HexGridWindow(wx.ScrolledWindow):
         self.header_font = wx.Font(self.text_font).MakeBold()
 
         self.update_dependents = self.update_dependents_null
-        self.main = hexview.FixedFontNumpyWindow(self, self, np.zeros([0, 0], dtype=np.uint8))
+        self.main = grid_cls(self, self, np.zeros([0, 0], dtype=np.uint8))
         self.top = AuxWindow(self, self.main, True, False)
         self.left = AuxWindow(self, self.main, False, True)
         sizer = wx.FlexGridSizer(2,2,0,0)
@@ -292,9 +292,8 @@ class MyApp(wx.App):
         #on_paint callback draws the wrong area on screen...
         id = wx.NewId()
         frame = wx.Frame(None, id, "Test Text Grid" )
-        scroll = HexGridWindow(frame, wx.NewId())
-        #scroll.set_data(hexview.FakeList(1000))
-        scroll.set_data(np.arange(1024, dtype=np.uint8), 0x604, 16)
+        scroll = HexGridWindow(hexview.FixedFontMultiCellNumpyWindow, frame, wx.NewId())
+        scroll.set_data(np.arange(1024, dtype=np.uint8), 0x602, 4, [1, 2, 3, 4])
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()
