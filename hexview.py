@@ -951,6 +951,12 @@ class FixedFontMultiCellNumpyWindow(FixedFontNumpyWindow):
             yield self.col_to_cell[col], self.col_widths[col], self.col_label_text[col]
 
 
+class FixedFontMixedMultiCellNumpyWindow(FixedFontMultiCellNumpyWindow):
+        #             "0A 0X 0Y FF sv-bdizc  00 00 00 LDA $%04x"
+        #self.header = " A  X  Y SP sv-bdizc  Opcodes  Assembly"
+    pass
+
+
 if __name__ == "__main__":
     app = wx.App()
 

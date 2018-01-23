@@ -13,16 +13,10 @@ class DummyScroller(object):
         pass
 
 class AuxWindow(wx.ScrolledWindow):
-    def __init__(self, parent, scroll_source, use_x, use_y):
+    def __init__(self, parent, scroll_source, label_char_width=10):
         wx.ScrolledWindow.__init__(self, parent, -1)
         self.scroll_source = scroll_source
-        if use_x:
-            self.Draw = self.DrawHorz
-        else:
-            self.Draw = self.DrawVert
-        #             "0A 0X 0Y FF sv-bdizc  00 00 00 LDA $%04x"
-        #self.header = " A  X  Y SP sv-bdizc  Opcodes  Assembly"
-        self.header = ["%x" % x for x in range(16)]
+        self.label_char_width = label_char_width
         self.isDrawing = False
         self.EnableScrolling(False, False)
         self.ShowScrollbars(wx.SHOW_SB_NEVER, wx.SHOW_SB_NEVER)
@@ -53,16 +47,14 @@ class AuxWindow(wx.ScrolledWindow):
     def OnEraseBackground(self, evt):
         pass
 
-    @property
-    def row_label_char_size(self):
-        return 4
 
+class LeftAuxWindow(AuxWindow):
     def DrawVertText(self, t, line, dc):
         s = self.scroll_source
         y = (line - s.sy) * s.cell_height
         dc.DrawText(t, 0, y)
 
-    def DrawVert(self, odc=None):
+    def Draw(self, odc=None):
         if not odc:
             odc = wx.ClientDC(self)
 
@@ -79,6 +71,7 @@ class AuxWindow(wx.ScrolledWindow):
                 if s.IsLine(line):
                     self.DrawVertText(header, line, dc)
 
+class TopAuxWindow(AuxWindow):
     def DrawHorzText(self, t, sx, num_cells, dc):
         s = self.scroll_source
         x = (sx - s.sx) * s.cell_width
@@ -86,7 +79,7 @@ class AuxWindow(wx.ScrolledWindow):
         offset = ((s.cell_width * num_cells) - width)/2  # center text in cell
         dc.DrawText(t, x + offset, 0)
 
-    def DrawHorz(self, odc=None):
+    def Draw(self, odc=None):
         if not odc:
             odc = wx.ClientDC(self)
 
@@ -131,8 +124,8 @@ class HexGridWindow(wx.ScrolledWindow):
 
         self.update_dependents = self.update_dependents_null
         self.main = grid_cls(self, self, np.zeros([0, 0], dtype=np.uint8))
-        self.top = AuxWindow(self, self.main, True, False)
-        self.left = AuxWindow(self, self.main, False, True)
+        self.top = TopAuxWindow(self, self.main)
+        self.left = LeftAuxWindow(self, self.main, 4)
         sizer = wx.FlexGridSizer(2,2,0,0)
         self.corner = sizer.Add(5, 5, 0, wx.EXPAND)
         sizer.Add(self.top, 0, wx.EXPAND)
@@ -186,7 +179,7 @@ class HexGridWindow(wx.ScrolledWindow):
             - left = 80, height
         """
         top_height = self.main.cell_height + self.col_label_border_width
-        left_width = self.left.row_label_char_size * self.main.fw + self.row_label_border_width
+        left_width = self.left.label_char_width * self.main.fw + self.row_label_border_width
         self.main.SetVirtualSize(wx.Size(width,height))
         #(wt, ht) = self.top.GetSize()
         self.top.SetVirtualSize(wx.Size(width, top_height))
