@@ -145,7 +145,7 @@ class DrawTextImageCache(object):
 
 
 class FixedFontDataWindow(wx.ScrolledWindow):
-    def __init__(self, parent, settings_obj, data):
+    def __init__(self, parent, settings_obj, data, num_cols=16):
 
         wx.ScrolledWindow.__init__(self, parent, -1, style=wx.WANTS_CHARS)
 
@@ -158,7 +158,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.InitScrolling(parent)
         self.SelectOff()
         self.SetFocus()
-        self.set_data(data, 0, 16)
+        self.set_data(data)
         self.SpacesPerTab = 4
 
 ##------------------ Init stuff
@@ -747,16 +747,18 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
     def __init__(self, *args, **kwargs):
         FixedFontDataWindow.__init__(self, *args, **kwargs)
 
-    def setup_metadata(self, start_addr, bytes_per_row, *args, **kwargs):
+    def setup_metadata(self, start_addr=0, bytes_per_row=16, use_offset=True, *args, **kwargs):
         self.start_addr = start_addr
         self.bytes_per_row = bytes_per_row
-        self.start_offset = start_addr & 0x0f
-        self.label_start_addr = (start_addr // bytes_per_row) * bytes_per_row
+        self.items_per_row = bytes_per_row
+        self.start_offset = start_addr & 0x0f if use_offset else 0
+        self.label_start_addr = int(start_addr // bytes_per_row) * bytes_per_row
         self.lines_in_file = ((self.start_offset + len(self.lines) - 1) / bytes_per_row) + 1
         self.last_valid_index = len(self.lines)
         print(self.lines, self.lines_in_file, self.start_offset, self.start_addr)
         self.current_line_length = bytes_per_row
         self.max_line_len = bytes_per_row
+        self.col_label_text = ["%x" % x for x in range(self.items_per_row)]
 
     def create_renderer(self):
         return HexByteImageCache(self.settings_obj, None, self.fw, self.fh)
@@ -831,25 +833,31 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
             style = self.get_style_array(index, last_index)
             self.DrawEditText(d, style, cell_start - self.sx, sy - self.sy, dc)
 
+    def get_index_of_row(self, line):
+        return (line * self.items_per_row) - self.start_offset
+
+    def get_row_label_text(self, start_line):
+        for line in range(start_line, start_line + self.sh + 1):
+            yield line, "%04x" % (self.get_index_of_row(line) + self.start_addr)
+
+    def get_col_labels(self, starting_cell):
+        for cell in range(starting_cell, self.sw):
+            yield cell, 1, self.col_label_text[cell]
+
 
 class FixedFontMultiCellNumpyWindow(FixedFontNumpyWindow):
-    def setup_metadata(self, start_addr, items_per_row, col_widths=None, *args, **kwargs):
-        self.start_addr = start_addr
+    def setup_metadata(self, start_addr=0, col_widths=None, *args, **kwargs):
         if col_widths is None:
-            col_widths = [1] * items_per_row
-        self.calc_cells(items_per_row, col_widths)
-        self.start_offset = 0  # no partial rows!
-        self.label_start_addr = (start_addr // items_per_row) * items_per_row
-        self.lines_in_file = int((len(self.lines) - 1) / items_per_row) + 1
-        self.last_valid_index = len(self.lines) - 1
+            col_widths = [1] * 16
+        FixedFontNumpyWindow.setup_metadata(self, start_addr, len(col_widths), use_offset=False, *args, **kwargs)
+        self.calc_cells(col_widths)
 
-    def calc_cells(self, items_per_row, col_widths):
+    def calc_cells(self, col_widths):
         """
         :param items_per_row: number of entries in each line of the array
         :param col_widths: array, entry containing the number of cells (width)
             required to display that items in that column
         """
-        self.items_per_row = items_per_row
         self.col_widths = tuple(col_widths)  # copy to prevent possible weird errors if parent modifies list!
         self.total_cell_width = reduce(lambda x,y: x + y, col_widths)
         self.cell_to_col = []
@@ -936,6 +944,11 @@ class FixedFontMultiCellNumpyWindow(FixedFontNumpyWindow):
                 cell_start = self.col_to_cell[col]
                 cell_width = self.col_widths[col]
                 self.DrawEditText(data[col], style[col], cell_start, cell_start - self.sx, cell_width, sy - self.sy, dc)
+
+    def get_col_labels(self, starting_cell):
+        starting_col = self.cell_to_col[starting_cell]
+        for col in range(starting_col, self.items_per_row):
+            yield self.col_to_cell[col], self.col_widths[col], self.col_label_text[col]
 
 
 if __name__ == "__main__":

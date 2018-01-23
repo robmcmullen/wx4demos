@@ -75,15 +75,15 @@ class AuxWindow(wx.ScrolledWindow):
             dc.SetTextForeground(s.settings_obj.text_color)
             dc.SetBackground(wx.Brush(s.settings_obj.row_header_bg_color))
             dc.Clear()
-            for line in range(s.sy, s.sy + s.sh + 1):
+            for line, header in self.scroll_source.get_row_label_text(s.sy):
                 if s.IsLine(line):
-                    self.DrawVertText("%04x" % (line * 16), line, dc)
+                    self.DrawVertText(header, line, dc)
 
-    def DrawHorzText(self, t, sx, dc):
+    def DrawHorzText(self, t, sx, num_cells, dc):
         s = self.scroll_source
         x = (sx - s.sx) * s.cell_width
         width = len(t) * s.fw
-        offset = (s.cell_width - width)/2  # center text in cell
+        offset = ((s.cell_width * num_cells) - width)/2  # center text in cell
         dc.DrawText(t, x + offset, 0)
 
     def DrawHorz(self, odc=None):
@@ -99,10 +99,8 @@ class AuxWindow(wx.ScrolledWindow):
             dc.SetTextForeground(s.settings_obj.text_color)
             dc.SetBackground(wx.Brush(s.settings_obj.col_header_bg_color))
             dc.Clear()
-            sx = s.sx
-            for header in self.header[s.sx:]:
-                self.DrawHorzText(header, sx, dc)
-                sx += 1
+            for cell, num_cells, header in self.scroll_source.get_col_labels(s.sx):
+                self.DrawHorzText(header, cell, num_cells, dc)
 
 
 class HexGridWindow(wx.ScrolledWindow):
@@ -292,8 +290,8 @@ class MyApp(wx.App):
         #on_paint callback draws the wrong area on screen...
         id = wx.NewId()
         frame = wx.Frame(None, id, "Test Text Grid" )
-        scroll = HexGridWindow(hexview.FixedFontMultiCellNumpyWindow, frame, wx.NewId())
-        scroll.set_data(np.arange(1024, dtype=np.uint8), 0x602, 4, [1, 2, 3, 4])
+        scroll = HexGridWindow(hexview.FixedFontMultiCellNumpyWindow, frame)
+        scroll.set_data(np.arange(1024, dtype=np.uint8), 0x602, [1, 2, 3, 4])
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()
