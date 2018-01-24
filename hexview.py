@@ -630,16 +630,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             y = self.cy - self.sy
             self.DrawSimpleCursor(x, y, dc)
 
-    def DrawSimpleCursor(self, xp, yp, dc = None, old=False):
-        if not dc:
-            dc = wx.ClientDC(self)
-
-        w = self.cell_width_in_pixels + 2
-        h = self.cell_height_in_pixels + 1
-        x = (xp * self.cell_width_in_pixels) - 1
-        y = (yp * self.cell_height_in_pixels)
-        self.draw_caret(dc, x, y, w, h)
-
     def DrawSimpleCursor(self, cell_x, cell_y, dc = None, old=False):
         if not dc:
             dc = wx.ClientDC(self)
@@ -656,9 +646,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
     def draw_caret(self, dc, x, y, w, h):
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        w += 2
-        h += 1
-        x -= 1
         dc.SetPen(self.settings_obj.cursor_pen)
         dc.DrawRectangle(x, y, w, h)
         x -= 1
