@@ -51,7 +51,7 @@ class AuxWindow(wx.ScrolledWindow):
 class LeftAuxWindow(AuxWindow):
     def DrawVertText(self, t, line, dc):
         s = self.scroll_source
-        y = (line - s.sy) * s.cell_height
+        y = (line - s.sy) * s.cell_height_in_pixels
         dc.DrawText(t, 0, y)
 
     def Draw(self, odc=None):
@@ -67,16 +67,16 @@ class LeftAuxWindow(AuxWindow):
             dc.SetTextForeground(s.settings_obj.text_color)
             dc.SetBackground(wx.Brush(s.settings_obj.row_header_bg_color))
             dc.Clear()
-            for line, header in self.scroll_source.get_row_label_text(s.sy):
+            for line, header in self.scroll_source.table.get_row_label_text(s.sy, s.sh):
                 if s.IsLine(line):
                     self.DrawVertText(header, line, dc)
 
 class TopAuxWindow(AuxWindow):
     def DrawHorzText(self, t, sx, num_cells, dc):
         s = self.scroll_source
-        x = (sx - s.sx) * s.cell_width
+        x = (sx - s.sx) * s.cell_width_in_pixels
         width = len(t) * s.fw
-        offset = ((s.cell_width * num_cells) - width)/2  # center text in cell
+        offset = ((s.cell_width_in_pixels * num_cells) - width)/2  # center text in cell
         dc.DrawText(t, x + offset, 0)
 
     def Draw(self, odc=None):
@@ -92,18 +92,24 @@ class TopAuxWindow(AuxWindow):
             dc.SetTextForeground(s.settings_obj.text_color)
             dc.SetBackground(wx.Brush(s.settings_obj.col_header_bg_color))
             dc.Clear()
-            for cell, num_cells, header in self.scroll_source.get_col_labels(s.sx):
+            for cell, num_cells, header in self.scroll_source.table.get_col_labels(s.sx):
                 self.DrawHorzText(header, cell, num_cells, dc)
 
 
+class TableViewParams(object):
+    col_label_border_width = 3
+    row_label_border_width = 3
+    row_height_extra_padding = -3
+    base_cell_width_in_chars = 2
+    pixel_width_padding = 2
+    label_char_width = 4
+
+
 class HexGridWindow(wx.ScrolledWindow):
-    def __init__(self, grid_cls, *args, **kwargs):
+    def __init__(self, grid_cls, table, *args, **kwargs):
         wx.ScrolledWindow.__init__ (self, *args, **kwargs)
         self.SetAutoLayout(True)
 
-        self.col_label_border_width = 3
-        self.row_label_border_width = 3
-        self.row_height_extra_padding = -3
         self.background_color = wx.WHITE
         self.text_color = wx.BLACK
         self.row_header_bg_color = wx.Colour(224, 224, 224)
@@ -123,9 +129,10 @@ class HexGridWindow(wx.ScrolledWindow):
         self.header_font = wx.Font(self.text_font).MakeBold()
 
         self.update_dependents = self.update_dependents_null
-        self.main = grid_cls(self, self, np.zeros([0, 0], dtype=np.uint8))
+        self.view_params = TableViewParams()
+        self.main = grid_cls(self, self, table, self.view_params)
         self.top = TopAuxWindow(self, self.main)
-        self.left = LeftAuxWindow(self, self.main, 4)
+        self.left = LeftAuxWindow(self, self.main)
         sizer = wx.FlexGridSizer(2,2,0,0)
         self.corner = sizer.Add(5, 5, 0, wx.EXPAND)
         sizer.Add(self.top, 0, wx.EXPAND)
@@ -178,8 +185,8 @@ class HexGridWindow(wx.ScrolledWindow):
             - top = width, 40
             - left = 80, height
         """
-        top_height = self.main.cell_height + self.col_label_border_width
-        left_width = self.left.label_char_width * self.main.fw + self.row_label_border_width
+        top_height = self.main.cell_height_in_pixels + self.view_params.col_label_border_width
+        left_width = self.view_params.label_char_width * self.main.fw + self.view_params.row_label_border_width
         self.main.SetVirtualSize(wx.Size(width,height))
         #(wt, ht) = self.top.GetSize()
         self.top.SetVirtualSize(wx.Size(width, top_height))
@@ -283,8 +290,8 @@ class MyApp(wx.App):
         #on_paint callback draws the wrong area on screen...
         id = wx.NewId()
         frame = wx.Frame(None, id, "Test Text Grid" )
-        scroll = HexGridWindow(hexview.FixedFontMultiCellNumpyWindow, frame)
-        scroll.set_data(np.arange(1024, dtype=np.uint8), 0x602, [1, 2, 3, 4])
+        table = hexview.VariableWidthHexTable(np.arange(1024, dtype=np.uint8), 4, 0x602, [1, 2, 3, 4])
+        scroll = HexGridWindow(hexview.FixedFontMultiCellNumpyWindow, table, frame)
 
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()

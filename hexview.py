@@ -7,6 +7,13 @@ import wx.lib.editor
 
 from atrcopy import match_bit_mask, comment_bit_mask, user_bit_mask, selected_bit_mask, diff_bit_mask
 
+import logging
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+draw_log = logging.getLogger("draw")
+scroll_log = logging.getLogger("scroll")
+
+
 def ForceBetween(min, val, max):
     if val  > max:
         return max
@@ -24,7 +31,7 @@ class Scroller:
 
     def SetScrollbars(self, fw, fh, w, h, x, y):
         if (self.ow != w or self.oh != h or self.ox != x or self.oy != y):
-            print("Setting scrollbar to: %s" % str([fw, fh, w, h, x, y]))
+            scroll_log.debug("Setting scrollbar to: %s" % str([fw, fh, w, h, x, y]))
             self.parent.SetScrollbars(fw, fh, w, h, x, y)
             self.ow = w
             self.oh = h
@@ -49,18 +56,14 @@ class FakeList(object):
 
 
 class DrawTextImageCache(object):
-    def __init__(self, machine, font=None, width=-1, height=-1):
+    def __init__(self, machine, view_obj, font=None):
         self.font = font
+        self.view_obj = view_obj
         self.cache = {}
-        self.set_size(width, height)
         self.set_colors(machine)
 
     def invalidate(self):
         self.cache = {}
-
-    def set_size(self, w, h):
-        self.cell_width = width
-        self.cell_height = height
 
     def set_colors(self, m):
         self.color = m.text_color
@@ -136,38 +139,80 @@ class DrawTextImageCache(object):
         dc.DrawText(text, fg_rect.x, fg_rect.y)
 
     def draw_text(self, dc, rect, text, style):
-        print(text, rect)
+        draw_log.debug(str((text, rect)))
         for i, c in enumerate(text):
             s = style[i]
             self.draw_cached_text(dc, rect, c, s)
-            rect.x += self.cell_width * len(c)
+            rect.x += self.view_obj.cell_width_in_pixels * len(c)
 
+
+class FakeStyle(object):
+    def __init__(self, view_obj):
+        self.view_obj = view_obj
+
+    def __len__(self):
+        return len(self.view_obj.table.data)
+
+    def __getitem__(self, item):
+        index, last_index = item.start, item.stop
+        try:
+            index, last_index = item.start, item.stop
+        except:
+            index, last_index = item, item + 1
+        count = last_index - index
+        style = np.zeros(count, dtype=np.uint8)
+        if last_index < self.view_obj.SelectBegin or index >= self.view_obj.SelectEnd:
+            pass
+        else:
+            for i in range(index, last_index):
+                if i >= self.view_obj.SelectBegin and i < self.view_obj.SelectEnd:
+                    style[i - index] = selected_bit_mask
+        return style
 
 
 class FixedFontDataWindow(wx.ScrolledWindow):
-    def __init__(self, parent, settings_obj, data, num_cols=16):
+    def __init__(self, parent, settings_obj, table, view_params):
 
         wx.ScrolledWindow.__init__(self, parent, -1, style=wx.WANTS_CHARS)
 
         self.isDrawing = False
         self.settings_obj = settings_obj
-        self.InitCoords()
-        self.InitFonts()
         self.MapEvents()
         self.InitDoubleBuffering()
         self.InitScrolling(parent)
+        self.recalc_view(view_params, table)
+        self.style = FakeStyle(self)
+
+    def recalc_view(self, view_params=None, table=None):
+        if view_params is not None:
+            self.view_params = view_params
+        if table is None:
+            table = self.table
+        self.InitFonts()
         self.SelectOff()
         self.SetFocus()
-        self.set_data(data)
-        self.SpacesPerTab = 4
+        self.set_table(table)
+
+    def set_table(self, table):
+        self.InitCoords()
+        self.table = table
+        self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
+        self.AdjustScrollbars()
+        self.init_renderers()
+        self.UpdateView(None)
+
+    def init_renderers(self):
+        self.text_renderer = self.table.create_renderer(None, self.settings_obj, self)
+
+    @property
+    def lines(self):
+        return self.table.data
 
 ##------------------ Init stuff
 
     def InitCoords(self):
         self.cx = 0
         self.cy = 0
-        self.oldCx = 0
-        self.oldCy = 0
         self.sx = 0
         self.sy = 0
         self.sw = 0
@@ -197,25 +242,25 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.bw, self.bh = self.GetClientSize()
 
         if wx.Platform == "__WXMSW__":
-            self.sh = int(self.bh / self.cell_height)
-            self.sw = int(self.bw / self.cell_width) - 1
+            self.sh = int(self.bh / self.cell_height_in_pixels)
+            self.sw = int(self.bw / self.cell_width_in_pixels) - 1
         else:
-            self.sh = int(self.bh / self.cell_height)
-            if self.lines_in_file >= self.sh:
+            self.sh = int(self.bh / self.cell_height_in_pixels)
+            if self.table.num_rows >= self.sh:
                 self.bw = self.bw - wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
-                self.sw = int(self.bw / self.cell_width) - 1
+                self.sw = int(self.bw / self.cell_width_in_pixels) - 1
 
-            self.sw = int(self.bw / self.cell_width) - 1
-            if self.max_line_len >= self.sw:
+            self.sw = int(self.bw / self.cell_width_in_pixels) - 1
+            if self.table.num_cells >= self.sw:
                 self.bh = self.bh - wx.SystemSettings.GetMetric(wx.SYS_HSCROLL_Y)
-                self.sh = int(self.bh / self.cell_height)
+                self.sh = int(self.bh / self.cell_height_in_pixels)
 
     def UpdateView(self, dc = None):
         if dc is None:
             dc = wx.ClientDC(self)
         if dc.IsOk():
             self.SetCharDimensions()
-            print("scroll:", self.sx, self.sy, "cursor", self.cx, self.cy)
+            scroll_log.debug(str(("scroll:", self.sx, self.sy, "cursor", self.cx, self.cy)))
             if self.Selecting:
                 self.KeepCursorOnScreen()
             else:
@@ -243,48 +288,40 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         dc.SetFont(self.settings_obj.text_font)
         self.fw = dc.GetCharWidth()
         self.fh = dc.GetCharHeight()
-        self.text_renderer = self.create_renderer()
-        self.cell_width = self.text_renderer.cell_width
-        self.cell_height = self.fh + self.settings_obj.row_height_extra_padding
-
-    def create_renderer(self):
-        return DrawTextImageCache(self.settings_obj, None, self.fw, self.fh)
+        self.cell_width_in_pixels = self.view_params.pixel_width_padding * 2 + self.view_params.base_cell_width_in_chars * self.fw
+        self.cell_height_in_pixels = self.fh + self.view_params.row_height_extra_padding
 
     def InitDoubleBuffering(self):
         pass
 
 ##-------- Enforcing screen boundaries, cursor movement
 
-    def enforce_valid_cursor(self):
-        pass
-
     def KeepCursorOnScreen(self):
         self.sy = ForceBetween(max(0, self.cy-self.sh), self.sy, self.cy)
         self.sx = ForceBetween(max(0, self.cx-self.sw), self.sx, self.cx)
-        self.enforce_valid_cursor()
+        self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
         self.AdjustScrollbars()
 
     def HorizBoundaries(self):
         self.SetCharDimensions()
-        maxLineLen = self.max_line_len
-        self.sx = ForceBetween(0, self.sx, max(self.sw, maxLineLen - self.sw + 1))
+        self.sx = ForceBetween(0, self.sx, max(self.sw, self.table.num_cells - self.sw + 1))
 
     def VertBoundaries(self):
         self.SetCharDimensions()
-        self.sy = ForceBetween(0, self.sy, max(self.sh, self.lines_in_file - self.sh + 1))
+        self.sy = ForceBetween(0, self.sy, max(self.sh, self.table.num_rows - self.sh + 1))
 
     def cVert(self, num):
         self.cy = self.cy + num
-        self.cy = ForceBetween(0, self.cy, self.lines_in_file - 1)
+        self.cy = ForceBetween(0, self.cy, self.table.num_rows - 1)
         self.sy = ForceBetween(self.cy - self.sh + 1, self.sy, self.cy)
         self.cx = min(self.cx, self.current_line_length - 1)
-        self.enforce_valid_cursor()
+        self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
 
     def cHoriz(self, num):
         self.cx = self.cx + num
         self.cx = ForceBetween(0, self.cx, self.current_line_length - 1)
         self.sx = ForceBetween(self.cx - self.sw + 1, self.sx, self.cx)
-        self.enforce_valid_cursor()
+        self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
 
     def AboveScreen(self, row):
         return row < self.sy
@@ -300,27 +337,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
 ##----------------- data structure helper functions
 
-    def GetText(self):
-        return self.lines
-
-    def set_data(self, lines, *args, **kwargs):
-        self.InitCoords()
-        self.lines = lines
-        self.setup_metadata(*args, **kwargs)
-        self.enforce_valid_cursor()
-        self.AdjustScrollbars()
-        self.UpdateView(None)
-
-    def setup_metadata(self, *args, **kwargs):
-        pass
-
     def IsLine(self, lineNum):
-        return (0<=lineNum) and (lineNum<self.lines_in_file)
-
-    def GetTextLine(self, lineNum):
-        if self.IsLine(lineNum):
-            return self.lines[lineNum]
-        return ""
+        return (0<=lineNum) and (lineNum<self.table.num_rows)
 
 ##-------------------------- Mouse scroll timing functions
 
@@ -369,7 +387,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.SetScrollTimer()
         if self.CanScroll():
             row = self.sy + self.sh + 1
-            row  = min(row, self.lines_in_file - 1)
+            row  = min(row, self.table.num_rows - 1)
             self.cy = row
 
     def HandleLeftOfScreen(self, col):
@@ -389,22 +407,24 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 ##------------------------ mousing functions
 
     def MouseToRow(self, mouseY):
-        row  = self.sy + int(mouseY / self.cell_height)
+        row  = self.sy + int(mouseY / self.cell_height_in_pixels)
         if self.AboveScreen(row):
             self.HandleAboveScreen(row)
         elif self.BelowScreen(row):
             self.HandleBelowScreen(row)
         else:
-            self.cy  = min(row, self.lines_in_file - 1)
+            self.cy  = min(row, self.table.num_rows - 1)
 
     def MouseToCol(self, mouseX):
-        col = self.sx + int(mouseX / self.cell_width)
-        if self.LeftOfScreen(col):
-            self.HandleLeftOfScreen(col)
-        elif self.RightOfScreen(col):
-            self.HandleRightOfScreen(col)
+        cell = self.sx + int(mouseX / self.cell_width_in_pixels)
+        if self.LeftOfScreen(cell):
+            self.HandleLeftOfScreen(cell)
+        elif self.RightOfScreen(cell):
+            self.HandleRightOfScreen(cell)
         else:
-            self.cx = min(col, self.current_line_length)
+            self.cx = min(cell, self.current_line_length)
+        # MouseToRow must be called first so the cursor is in the correct row
+        self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
 
     def MouseToCursor(self, event):
         self.MouseToRow(event.GetY())
@@ -440,8 +460,6 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 #------------------------- Scrolling
 
     def HorizScroll(self, event, eventType):
-        maxLineLen = self.max_line_len
-
         if eventType == wx.wxEVT_SCROLLWIN_LINEUP:
             self.sx -= 1
         elif eventType == wx.wxEVT_SCROLLWIN_LINEDOWN:
@@ -453,8 +471,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         elif eventType == wx.wxEVT_SCROLLWIN_TOP:
             self.sx = self.cx = 0
         elif eventType == wx.wxEVT_SCROLLWIN_BOTTOM:
-            self.sx = maxLineLen - self.sw
-            self.cx = maxLineLen
+            self.sx = self.table.num_cells - self.sw
+            self.cx = self.table.num_cells
         else:
             self.sx = event.GetPosition()
 
@@ -472,8 +490,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         elif eventType == wx.wxEVT_SCROLLWIN_TOP:
             self.sy = self.cy = 0
         elif eventType == wx.wxEVT_SCROLLWIN_BOTTOM:
-            self.sy = self.lines_in_file - self.sh
-            self.cy = self.lines_in_file
+            self.sy = self.table.num_rows - self.sh
+            self.cy = self.table.num_rows
         else:
             print("Position:", event.GetPosition(), "old:", self.sy, self.GetViewStart())
             self.sy = event.GetPosition()
@@ -484,8 +502,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if self:
             self.SetCharDimensions()
             self.scroller.SetScrollbars(
-                self.cell_width, self.cell_height,
-                self.max_line_len+3, max(self.lines_in_file+1, self.sh),
+                self.cell_width_in_pixels, self.cell_height_in_pixels,
+                self.table.num_cells+3, max(self.table.num_rows+1, self.sh),
                 self.sx, self.sy)
         else:
             print("NOT ADJUSTING SCROLLBARS!")
@@ -553,7 +571,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         print("OESUHCOEHUSRCOUHSRCOHEUCROEHUH")
         try:
             action[key](event)
-            self.enforce_valid_cursor()
+            self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
             self.UpdateView()
             self.AdjustScrollbars()
         except KeyError:
@@ -605,8 +623,8 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if not dc:
             dc = wx.ClientDC(self)
 
-        if (self.lines_in_file)<self.cy: #-1 ?
-            self.cy = self.lines_in_file-1
+        if (self.table.num_rows)<self.cy: #-1 ?
+            self.cy = self.table.num_rows-1
         if self.cy >= 0:
             x = self.cx - self.sx
             y = self.cy - self.sy
@@ -616,10 +634,24 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if not dc:
             dc = wx.ClientDC(self)
 
-        w = self.cell_width + 2
-        h = self.cell_height + 1
-        x = (xp * self.cell_width) - 1
-        y = (yp * self.cell_height)
+        w = self.cell_width_in_pixels + 2
+        h = self.cell_height_in_pixels + 1
+        x = (xp * self.cell_width_in_pixels) - 1
+        y = (yp * self.cell_height_in_pixels)
+        self.draw_caret(dc, x, y, w, h)
+
+    def DrawSimpleCursor(self, cell_x, cell_y, dc = None, old=False):
+        if not dc:
+            dc = wx.ClientDC(self)
+
+        t = self.table
+        col = t.cell_to_col[cell_x]
+        num_cells = t.col_widths[col]
+        w = (num_cells * self.cell_width_in_pixels) + 2
+        h = self.cell_height_in_pixels + 1
+        cell_x = t.col_to_cell[col]
+        x = (cell_x * self.cell_width_in_pixels) - 1
+        y = (cell_y * self.cell_height_in_pixels)
         self.draw_caret(dc, x, y, w, h)
 
     def draw_caret(self, dc, x, y, w, h):
@@ -643,39 +675,15 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         dc.DrawRectangle(x, y, w, h)
 
     def DrawEditText(self, t, style, x, y, dc):
-        #dc.DrawText(t, x * self.cell_width, y * self.cell_height)
-        rect = wx.Rect(x * self.cell_width, y * self.cell_height, len(t) * self.cell_width, self.cell_height)
+        #dc.DrawText(t, x * self.cell_width_in_pixels, y * self.cell_height_in_pixels)
+        rect = wx.Rect(x * self.cell_width_in_pixels, y * self.cell_height_in_pixels, len(t) * self.cell_width_in_pixels, self.cell_height_in_pixels)
         self.text_renderer.draw_text(dc, rect, t, style)
-
-    def get_style_array(self, text, line):
-        count = len(text)
-        style = np.zeros(count, dtype=np.uint8)
-        if self.SelectBegin is None or self.SelectEnd is None:
-            return style
-        (bRow, bCol) = self.SelectBegin
-        (eRow, eCol) = self.SelectEnd
-        if (eRow < bRow):
-            (bRow, bCol) = self.SelectEnd
-            (eRow, eCol) = self.SelectBegin
-        if (line < bRow or eRow < line):
-            return style
-        if (bRow < line and line < eRow):
-            return style + selected_bit_mask
-        if (bRow == eRow) and (eCol < bCol):
-            (bCol, eCol) = (eCol, bCol)
-        # selection either starts or ends on this line
-        if (bRow < line):
-            bCol = 0
-        if (line < eRow):
-            eCol = count
-        style[bCol:eCol] = selected_bit_mask
-        return style
 
     def DrawLine(self, sy, line, dc):
         if self.IsLine(line):
             l   = line
             t   = self.lines[l]
-            style = self.get_style_array(t, l)
+            style = self.style[l]
             t   = t[self.sx:]
             style = style[self.sx:]
             self.DrawEditText(t, style, 0, sy - self.sy, dc)
@@ -703,20 +711,16 @@ class FixedFontTextWindow(FixedFontDataWindow):
             return 0
 
     @property
-    def lines_in_file(self):
+    def num_rows(self):
         return len(self.lines)
 
     @property
-    def max_line_len(self):
+    def num_cells(self):
         return 64
 
 
 class HexByteImageCache(DrawTextImageCache):
-    def set_size(self, w, h):
-        self.width_padding = 2
-        self.char_width = w
-        self.cell_width = self.char_width * 2 + self.width_padding * 2
-        self.cell_height = h
+    num_chars = 2
 
     def draw_cached_text(self, dc, rect, text, style):
         k = (text, style, rect.width, rect.height)
@@ -727,7 +731,8 @@ class HexByteImageCache(DrawTextImageCache):
             mdc = wx.MemoryDC()
             mdc.SelectObject(bmp)
             t = "%02x" % text
-            r = wx.Rect(self.width_padding, 0, self.char_width * 2, rect.height)
+            v = self.view_obj
+            r = wx.Rect(v.view_params.pixel_width_padding, 0, v.fw * 2, rect.height)
             bg_rect = wx.Rect(0, 0, rect.width, rect.height)
             self.draw_text_to_dc(mdc, bg_rect, r, t, style)
             del mdc  # force the bitmap painting by deleting the gc
@@ -735,47 +740,21 @@ class HexByteImageCache(DrawTextImageCache):
         dc.DrawBitmap(bmp, rect.x, rect.y)
 
     def draw_text(self, dc, rect, text, style, num_cells=1):
-        print(rect, text)
-        rect.width = num_cells * self.cell_width
+        draw_log.debug(str((rect, text)))
+        rect.width = num_cells * self.view_obj.cell_width_in_pixels
         for i, c in enumerate(text):
-            print(i, c, rect)
+            draw_log.debug(str((i, c, rect)))
             self.draw_cached_text(dc, rect, c, style[i])
             rect.x += rect.width
 
 
 class FixedFontNumpyWindow(FixedFontDataWindow):
-    def __init__(self, *args, **kwargs):
-        FixedFontDataWindow.__init__(self, *args, **kwargs)
+    def init_renderers(self):
+        self.text_renderer = self.table.create_renderer(None, self.settings_obj, self)
 
-    def setup_metadata(self, start_addr=0, bytes_per_row=16, use_offset=True, *args, **kwargs):
-        self.start_addr = start_addr
-        self.bytes_per_row = bytes_per_row
-        self.items_per_row = bytes_per_row
-        self.start_offset = start_addr & 0x0f if use_offset else 0
-        self.label_start_addr = int(start_addr // bytes_per_row) * bytes_per_row
-        self.lines_in_file = ((self.start_offset + len(self.lines) - 1) / bytes_per_row) + 1
-        self.last_valid_index = len(self.lines)
-        print(self.lines, self.lines_in_file, self.start_offset, self.start_addr)
-        self.current_line_length = bytes_per_row
-        self.max_line_len = bytes_per_row
-        self.col_label_text = ["%x" % x for x in range(self.items_per_row)]
-
-    def create_renderer(self):
-        return HexByteImageCache(self.settings_obj, None, self.fw, self.fh)
-
-    def get_index_range(self, row, col):
-        """Get the byte offset from start of file given row, col
-        position.
-        """
-        index = row * self.bytes_per_row + col - self.start_offset
-        return index, index + 1
-
-    def enforce_valid_cursor(self):
-        index, _ = self.get_index_range(self.cy, self.cx)
-        if index < 0:
-            self.cx = self.start_offset
-        elif index >= self.last_valid_index:
-            self.cx = self.start_offset - 1
+    @property
+    def current_line_length(self):
+        return self.table.num_cells
 
     def start_selection(self):
         self.SelectBegin, self.SelectEnd = self.get_index_range(self.cy, self.cx)
@@ -791,17 +770,6 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
             self.SelectEnd = index2
         self.SelectNotify(self.Selecting, self.SelectBegin, self.SelectEnd)
         self.UpdateView()
-
-    def MouseToCol(self, mouseX):
-        col = self.sx + int(mouseX / self.cell_width)
-        if self.LeftOfScreen(col):
-            self.HandleLeftOfScreen(col)
-        elif self.RightOfScreen(col):
-            self.HandleRightOfScreen(col)
-        else:
-            self.cx = min(col, self.current_line_length)
-        # MouseToRow must be called first so the cursor is in the correct row
-        self.enforce_valid_cursor()
 
     def get_style_array(self, index, last_index):
         count = last_index - index
@@ -822,7 +790,7 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
             else:
                 index = (line * self.bytes_per_row) - self.start_offset
                 cell_start = 0
-            if line == self.lines_in_file - 1:
+            if line == self.table.num_rows - 1:
                 last_index = self.last_valid_index
                 cell_end = last_index - index
             else:
@@ -830,69 +798,17 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
                 last_index = index + cell_end
 
             d = self.lines[index:last_index]
-            style = self.get_style_array(index, last_index)
+            style = self.style[index:last_index]
             self.DrawEditText(d, style, cell_start - self.sx, sy - self.sy, dc)
-
-    def get_index_of_row(self, line):
-        return (line * self.items_per_row) - self.start_offset
-
-    def get_row_label_text(self, start_line):
-        for line in range(start_line, start_line + self.sh + 1):
-            yield line, "%04x" % (self.get_index_of_row(line) + self.start_addr)
-
-    def get_col_labels(self, starting_cell):
-        for cell in range(starting_cell, self.sw):
-            yield cell, 1, self.col_label_text[cell]
 
 
 class FixedFontMultiCellNumpyWindow(FixedFontNumpyWindow):
-    def setup_metadata(self, start_addr=0, col_widths=None, *args, **kwargs):
-        if col_widths is None:
-            col_widths = [1] * 16
-        FixedFontNumpyWindow.setup_metadata(self, start_addr, len(col_widths), use_offset=False, *args, **kwargs)
-        self.calc_cells(col_widths)
-
-    def calc_cells(self, col_widths):
-        """
-        :param items_per_row: number of entries in each line of the array
-        :param col_widths: array, entry containing the number of cells (width)
-            required to display that items in that column
-        """
-        self.col_widths = tuple(col_widths)  # copy to prevent possible weird errors if parent modifies list!
-        self.total_cell_width = reduce(lambda x,y: x + y, col_widths)
-        self.cell_to_col = []
-        self.col_to_cell = []
-        pos = 0
-        for i, width in enumerate(col_widths):
-            self.col_to_cell.append(pos)
-            self.cell_to_col.extend([i] * width)
-            pos += width
-        self.current_line_length = pos
-        self.max_line_len = pos
-
-    def get_index_range(self, row, cell):
-        """Get the byte offset from start of file given row, col
-        position.
-        """
-        index = row * self.items_per_row
-        index += self.cell_to_col[cell]
-        return index, index + 1
-
-    def enforce_valid_cursor(self):
-        if self.cx >= self.total_cell_width:
-            self.cx = self.total_cell_width - 1
-        index, _ = self.get_index_range(self.cy, self.cx)
-        if index < 0:
-            self.cx = 0
-        elif index >= self.last_valid_index:
-            self.cx = self.total_cell_width - 1
-
     def start_selection(self):
-        self.SelectBegin, self.SelectEnd = self.get_index_range(self.cy, self.cx)
+        self.SelectBegin, self.SelectEnd = self.table.get_index_range(self.cy, self.cx)
         self.anchor_start_index, self.anchor_end_index = self.SelectBegin, self.SelectEnd
 
     def update_selection(self):
-        index1, index2 = self.get_index_range(self.cy, self.cx)
+        index1, index2 = self.table.get_index_range(self.cy, self.cx)
         if index1 < self.anchor_start_index:
             self.SelectBegin = index1
             self.SelectEnd = self.anchor_end_index
@@ -902,53 +818,112 @@ class FixedFontMultiCellNumpyWindow(FixedFontNumpyWindow):
         self.SelectNotify(self.Selecting, self.SelectBegin, self.SelectEnd)
         self.UpdateView()
 
-    def MouseToCol(self, mouseX):
-        cell = self.sx + int(mouseX / self.cell_width)
-        if self.LeftOfScreen(cell):
-            self.HandleLeftOfScreen(cell)
-        elif self.RightOfScreen(cell):
-            self.HandleRightOfScreen(cell)
-        else:
-            self.cx = min(cell, self.current_line_length)
-        # MouseToRow must be called first so the cursor is in the correct row
-        self.enforce_valid_cursor()
-
-    def DrawSimpleCursor(self, cell_x, cell_y, dc = None, old=False):
-        if not dc:
-            dc = wx.ClientDC(self)
-
-        col = self.cell_to_col[cell_x]
-        num_cells = self.col_widths[col]
-        w = (num_cells * self.cell_width) + 2
-        h = self.cell_height + 1
-        cell_x = self.col_to_cell[col]
-        x = (cell_x * self.cell_width) - 1
-        y = (cell_y * self.cell_height)
-        self.draw_caret(dc, x, y, w, h)
-
     def DrawEditText(self, t, style, start_x, show_at_x, x_width, y, dc):
-        #dc.DrawText(t, x * self.cell_width, y * self.cell_height)
-        print("DRAWEDIT: ", start_x, show_at_x, x_width)
-        rect = wx.Rect(show_at_x * self.cell_width, y * self.cell_height, x_width * self.cell_width, self.cell_height)
-        self.text_renderer.draw_text(dc, rect, [t], [style], x_width)
+        #dc.DrawText(t, x * self.cell_width_in_pixels, y * self.cell_height_in_pixels)
+        draw_log.debug("DRAWEDIT: %d %d %d" % (start_x, show_at_x, x_width))
+        rect = wx.Rect(show_at_x * self.cell_width_in_pixels, y * self.cell_height_in_pixels, x_width * self.cell_width_in_pixels, self.cell_height_in_pixels)
+        self.table.hex_renderer.draw_text(dc, rect, [t], [style], x_width)
 
     def DrawLine(self, sy, line, dc):
         if self.IsLine(line):
             # import pdb; pdb.set_trace()
-            start_col = self.cell_to_col[self.sx]
-            index = line * self.items_per_row
-            last_index = (line + 1) * self.items_per_row
+            t = self.table
+            start_col = t.cell_to_col[self.sx]
+            index = line * t.items_per_row
+            last_index = (line + 1) * t.items_per_row
             data = self.lines[index:last_index]
-            style = self.get_style_array(index, last_index)
-            for col in range(start_col, self.items_per_row):
-                cell_start = self.col_to_cell[col]
-                cell_width = self.col_widths[col]
+            style = self.style[index:last_index]
+            for col in range(start_col, t.items_per_row):
+                cell_start = t.col_to_cell[col]
+                cell_width = t.col_widths[col]
                 self.DrawEditText(data[col], style[col], cell_start, cell_start - self.sx, cell_width, sy - self.sy, dc)
+
+
+class HexTable(object):
+    def __init__(self, data, bytes_per_row, start_addr, col_widths=None, start_offset_mask=0):
+        self.data = data
+        self.start_addr = start_addr
+        self.bytes_per_row = bytes_per_row
+        if col_widths is None:
+            col_widths = [1] * bytes_per_row
+        self.items_per_row = len(col_widths)
+        self.start_offset = start_addr & start_offset_mask if start_offset_mask else 0
+        self.num_rows = ((self.start_offset + len(self.data) - 1) / bytes_per_row) + 1
+        self.last_valid_index = len(self.data)
+        print(self.data, self.num_rows, self.start_offset, self.start_addr)
+        self.calc_cells(col_widths)
+        self.calc_labels()
+
+        self.default_renderer = None
+        self.hex_renderer = None
+
+    def calc_cells(self, col_widths):
+        """
+        :param items_per_row: number of entries in each line of the array
+        :param col_widths: array, entry containing the number of cells (width)
+            required to display that items in that column
+        """
+        self.col_widths = tuple(col_widths)  # copy to prevent possible weird errors if parent modifies list!
+        self.cell_to_col = []
+        self.col_to_cell = []
+        pos = 0
+        for i, width in enumerate(col_widths):
+            self.col_to_cell.append(pos)
+            self.cell_to_col.extend([i] * width)
+            pos += width
+        self.num_cells = pos
+
+    def calc_labels(self):
+        self.label_start_addr = int(self.start_addr // self.bytes_per_row) * self.bytes_per_row
+        self.col_label_text = ["%x" % x for x in range(self.items_per_row)]
+
+    def create_renderer(self, col, settings_obj, view_obj):
+        if not self.default_renderer:
+            self.default_renderer = DrawTextImageCache(settings_obj, view_obj)
+        if not self.hex_renderer:
+            self.hex_renderer = HexByteImageCache(settings_obj, view_obj)
+        if col is None:
+            return self.default_renderer
+        return self.hex_renderer
+
+    def enforce_valid_cursor(self, row, cell):
+        if cell >= self.num_cells:
+            cell = self.num_cells - 1
+        index, _ = self.get_index_range(row, cell)
+        if index < 0:
+            cell = 0
+        elif index >= self.last_valid_index:
+            cell = self.num_cells - 1
+        return cell
+
+    def get_row_label_text(self, start_line, num_lines):
+        for line in range(start_line, start_line + num_lines + 1):
+            yield line, "%04x" % (self.get_index_of_row(line) + self.start_addr)
 
     def get_col_labels(self, starting_cell):
         starting_col = self.cell_to_col[starting_cell]
         for col in range(starting_col, self.items_per_row):
             yield self.col_to_cell[col], self.col_widths[col], self.col_label_text[col]
+
+    def get_index_range(self, row, col):
+        """Get the byte offset from start of file given row, col
+        position.
+        """
+        index = row * self.bytes_per_row + col - self.start_offset
+        return index, index + 1
+
+    def get_index_of_row(self, line):
+        return (line * self.items_per_row) - self.start_offset
+
+
+class VariableWidthHexTable(HexTable):
+    def get_index_range(self, row, cell):
+        """Get the byte offset from start of file given row, col
+        position.
+        """
+        index = row * self.items_per_row
+        index += self.cell_to_col[cell]
+        return index, index + 1
 
 
 class FixedFontMixedMultiCellNumpyWindow(FixedFontMultiCellNumpyWindow):
