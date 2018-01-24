@@ -143,7 +143,7 @@ class DrawTextImageCache(object):
         for i, c in enumerate(text):
             s = style[i]
             self.draw_cached_text(dc, rect, c, s)
-            rect.x += self.view_obj.cell_width_in_pixels * len(c)
+            rect.x += self.view_obj.cell_width_in_pixels
 
 
 class FakeStyle(object):
@@ -230,7 +230,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         self.Bind(wx.EVT_WINDOW_DESTROY, self.OnDestroy)
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
 
-##-------------------- UpdateView/Cursor code
+##-------------------- UpdateView/Caret code
 
     def OnSize(self, event):
         self.AdjustScrollbars()
@@ -263,10 +263,10 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             self.SetCharDimensions()
             scroll_log.debug(str(("scroll:", self.sx, self.sy, "cursor", self.cx, self.cy)))
             if self.Selecting:
-                self.KeepCursorOnScreen()
+                self.KeepCaretOnScreen()
             else:
                 self.AdjustScrollbars()
-            self.DrawSimpleCursor(0,0, dc, True)
+            self.DrawSimpleCaret(0,0, dc, True)
             self.Draw(dc)
             self.parent_scrolled_window.update_dependents()
 
@@ -297,7 +297,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
 ##-------- Enforcing screen boundaries, cursor movement
 
-    def KeepCursorOnScreen(self):
+    def KeepCaretOnScreen(self):
         self.sy = ForceBetween(max(0, self.cy-self.sh), self.sy, self.cy)
         self.sx = ForceBetween(max(0, self.cx-self.sw), self.sx, self.cx)
         self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
@@ -427,18 +427,18 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         # MouseToRow must be called first so the cursor is in the correct row
         self.cx = self.table.enforce_valid_cursor(self.cy, self.cx)
 
-    def MouseToCursor(self, event):
+    def MouseToCaret(self, event):
         self.MouseToRow(event.GetY())
         self.MouseToCol(event.GetX())
 
     def OnMotion(self, event):
         if event.LeftIsDown() and self.HasCapture():
             self.Selecting = True
-            self.MouseToCursor(event)
+            self.MouseToCaret(event)
             self.update_selection()
 
     def OnLeftDown(self, event):
-        self.MouseToCursor(event)
+        self.MouseToCaret(event)
         self.start_selection()
         self.UpdateView()
         self.CaptureMouse()
@@ -620,7 +620,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
 
     #### Overrides
 
-    def DrawCursor(self, dc = None):
+    def DrawCaret(self, dc = None):
         if not dc:
             dc = wx.ClientDC(self)
 
@@ -629,9 +629,9 @@ class FixedFontDataWindow(wx.ScrolledWindow):
         if self.cy >= 0:
             x = self.cx - self.sx
             y = self.cy - self.sy
-            self.DrawSimpleCursor(x, y, dc)
+            self.DrawSimpleCaret(x, y, dc)
 
-    def DrawSimpleCursor(self, cell_x, cell_y, dc = None, old=False):
+    def DrawSimpleCaret(self, cell_x, cell_y, dc = None, old=False):
         if not dc:
             dc = wx.ClientDC(self)
 
@@ -687,7 +687,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             dc.Clear()
             for line in range(self.sy, self.sy + self.sh + 1):
                 self.DrawLine(line, line, dc)
-            self.DrawCursor(dc)
+            self.DrawCaret(dc)
 
 
 class FixedFontTextWindow(FixedFontDataWindow):
@@ -745,11 +745,11 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
         return self.table.num_cells
 
     def start_selection(self):
-        self.SelectBegin, self.SelectEnd = self.get_index_range(self.cy, self.cx)
+        self.SelectBegin, self.SelectEnd = self.table.get_index_range(self.cy, self.cx)
         self.anchor_start_index, self.anchor_end_index = self.SelectBegin, self.SelectEnd
 
     def update_selection(self):
-        index1, index2 = self.get_index_range(self.cy, self.cx)
+        index1, index2 = self.table.get_index_range(self.cy, self.cx)
         if index1 < self.anchor_start_index:
             self.SelectBegin = index1
             self.SelectEnd = self.anchor_end_index
@@ -772,22 +772,24 @@ class FixedFontNumpyWindow(FixedFontDataWindow):
 
     def DrawLine(self, sy, line, dc):
         if self.IsLine(line):
+            t = self.table
             if line == 0:
                 index = 0
-                cell_start = self.start_offset
+                cell_start = t.start_offset
             else:
-                index = (line * self.bytes_per_row) - self.start_offset
+                index = (line * t.bytes_per_row) - t.start_offset
                 cell_start = 0
-            if line == self.table.num_rows - 1:
-                last_index = self.last_valid_index
+            if line == t.num_rows - 1:
+                last_index = t.last_valid_index
                 cell_end = last_index - index
             else:
-                cell_end = self.bytes_per_row - cell_start
+                cell_end = t.bytes_per_row - cell_start
                 last_index = index + cell_end
 
             d = self.lines[index:last_index]
             style = self.style[index:last_index]
-            self.DrawEditText(d, style, cell_start - self.sx, sy - self.sy, dc)
+            text = ["%02x" % x for x in d]
+            self.DrawEditText(text, style, cell_start - self.sx, sy - self.sy, dc)
 
 
 class FixedFontMultiCellNumpyWindow(FixedFontNumpyWindow):

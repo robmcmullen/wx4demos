@@ -290,9 +290,14 @@ class MyApp(wx.App):
         #on_paint callback draws the wrong area on screen...
         id = wx.NewId()
         frame = wx.Frame(None, id, "Test Text Grid" )
+        splitter = wx.SplitterWindow(frame, -1, style = wx.SP_LIVE_UPDATE)
+        splitter.SetMinimumPaneSize(20)
         table = hexview.VariableWidthHexTable(np.arange(1024, dtype=np.uint8), 4, 0x602, [1, 2, 3, 4])
-        scroll = HexGridWindow(hexview.FixedFontMultiCellNumpyWindow, table, frame)
+        scroll1 = HexGridWindow(hexview.FixedFontMultiCellNumpyWindow, table, splitter)
+        table = hexview.HexTable(np.arange(1024, dtype=np.uint8), 16, 0x602)
+        scroll2 = HexGridWindow(hexview.FixedFontNumpyWindow, table, splitter)
 
+        splitter.SplitVertically(scroll1, scroll2)
         #(width, height) = dc.GetTextExtent("M")
         frame.Show()
         # self.SetTopWindow(frame)
