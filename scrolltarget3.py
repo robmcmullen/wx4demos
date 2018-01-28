@@ -1,5 +1,8 @@
-import wx
 import time
+import sys
+
+import wx
+
 
 class HexGridWindow(wx.ScrolledWindow):
     def __init__(self, parent, line_renderer, num_lines, *args, **kwargs):
@@ -25,7 +28,14 @@ class HexGridWindow(wx.ScrolledWindow):
         line_renderer.set_scroll_rate(self)
         self.Bind(wx.EVT_SCROLLWIN, self.on_scroll_window)
         self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
-       
+        self.Bind(wx.EVT_SIZE, self.on_size)
+
+    def on_size(self, event ):
+        print "Size " + str(self.GetSize())
+        print "VirtualSize " + str(self.GetVirtualSize())
+        print "ClientSize " + str(self.GetClientSize())
+        event.Skip()
+
     def on_left_up(self, event):
         print
         print "Title " + str(self)
@@ -124,13 +134,20 @@ class HexGridHeader(wx.ScrolledCanvas):
         self.SetBackgroundColour(wx.RED)
         self.SetSize(width, height)
         self.SetVirtualSize(width, height)
-        self.Bind(wx.EVT_LEFT_DOWN, self.on_left_up)
+        self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
+
+    def ensure_visible(self, cx, cy):
+        self.sy = ForceBetween(max(0, self.cy-self.sh), self.sy, self.cy)
+        self.sx = ForceBetween(max(0, self.cx-self.sw), self.sx, self.cx)
+        self.cy, self.cx, _ = self.table.enforce_valid_caret(self.cy, self.cx)
+        self.AdjustScrollbars()
 
     def on_size(self, event ):
         print "Size " + str(self.GetSize())
         print "VirtualSize " + str(self.GetVirtualSize())
+        print "ClientSize " + str(self.GetClientSize())
         size = self.GetSize()
         vsize = self.GetVirtualSize()
         if self.use_x and self.use_y:
@@ -142,7 +159,14 @@ class HexGridHeader(wx.ScrolledCanvas):
         else:
             self.SetVirtualSize(size.x, vsize.y)
 
+        w, h = self.GetClientSize()
+        self.num_cells_wide = (w / self.parent.line_renderer.w) + 1
+        if self.use_y:
+            self.num_lines_tall = (h / self.parent.line_renderer.h) + 1
+        else:
+            self.num_lines_tall = 1
         #self.Layout()
+
 
 
     def on_paint(self, event):
@@ -156,17 +180,10 @@ class HexGridHeader(wx.ScrolledCanvas):
         py *= self.use_y
         dc.SetLogicalOrigin(px, py)
 
-        w, h = self.GetClientSize()
-        num_cells_wide = (w / self.parent.line_renderer.w) + 1
-        if self.use_y:
-            num_lines_tall = (h / self.parent.line_renderer.h) + 1
-        else:
-            num_lines_tall = 1
+        print("on_paint: %dx%d at %d,%d. origin=%d,%d" % (self.num_cells_wide, self.num_lines_tall, cell_num, line_num, px, py))
 
-        print("on_paint: %dx%d at %d,%d. origin=%d,%d" % (num_cells_wide, num_lines_tall, cell_num, line_num, px, py))
-
-        for line in range(line_num, min(line_num + num_lines_tall, self.parent.num_lines)):
-            self.parent.line_renderer.draw(dc, line, cell_num, num_cells_wide)
+        for line in range(line_num, min(line_num + self.num_lines_tall, self.parent.num_lines)):
+            self.parent.line_renderer.draw(dc, line, cell_num, self.num_cells_wide)
      
     def on_left_up(self, event):
         print
@@ -175,6 +192,7 @@ class HexGridHeader(wx.ScrolledCanvas):
         print "ViewStart " + str(self.GetViewStart())
         print "Size " + str(self.GetSize())
         print "VirtualSize " + str(self.GetVirtualSize())
+        print "ClientSize " + str(self.GetClientSize())
 
 
 class HexGridColHeader(HexGridHeader):
