@@ -299,11 +299,42 @@ class MyApp(wx.App):
 
         splitter.SplitVertically(scroll1, scroll2)
         #(width, height) = dc.GetTextExtent("M")
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(splitter, 1, wx.EXPAND)
+
+        focusbtn = wx.Button(frame, -1, "Press to set focus to TextCtrl")
+        sizer.Add(focusbtn, 0, wx.EXPAND)
+        focusbtn.Bind(wx.EVT_BUTTON, self.set_focus)
+
+        frame.SetSizer(sizer)
+        frame.Layout()
+
+        self.t1 = wx.TextCtrl(frame, -1, "Test it out and see", size=(100,10), pos=(40,-40))
+        self.t1.Bind(wx.EVT_TEXT, self.EvtText)
+        self.t1.Bind(wx.EVT_CHAR, self.EvtChar)
+        #wx.CallAfter(self.t1.Hide)
+
         frame.Show()
         # self.SetTopWindow(frame)
        
         print "wx.VERSION = " + wx.VERSION_STRING
         return True
+
+    def set_focus(self, evt):
+        #self.t1.Hide()
+        self.t1.SetFocus()
+
+    def EvtText(self, event):
+        print('EvtText: %s' % event.GetString())
+
+    def EvtTextEnter(self, event):
+        print('EvtTextEnter')
+        event.Skip()
+
+    def EvtChar(self, event):
+        print('EvtChar: %d' % event.GetKeyCode())
+        event.Skip()
        
 #For testing
 if __name__ == '__main__':
