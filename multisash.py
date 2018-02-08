@@ -72,6 +72,9 @@ class MultiSash(wx.Window):
         self.OnMultiSize(None)
         self.child.OnSize(None)
 
+    def update_names(self):
+        self.Refresh()
+
 
 #----------------------------------------------------------------------
 
@@ -184,6 +187,7 @@ class MultiSplit(wx.Window):
             self.view2 = MultiViewLeaf(self.multiView, self, (x,y), (w1,h1))
             self.view1.SetSize((w2,h2))
             self.view2.OnSize(None)
+        self.multiView.update_names()
 
     def DestroyLeaf(self,caller):
         if not self.view2:              # We will only have 2 windows if
@@ -921,6 +925,9 @@ if __name__ == '__main__':
             pass
 
         def OnSize(self, event):
+            size = self.GetClientSize()
+            s = "Size: %d x %d"%(size.x, size.y)
+            self.SetName(s)
             self.Refresh()
 
 
