@@ -418,7 +418,7 @@ class MultiClient(wx.Window):
         self.setup_paint()
 
         if self.use_close_button:
-            self.close_button = CloseButton(self, size=self.close_button_size)
+            self.close_button = TitleBarCloser(self)
         else:
             self.close_button = None
 
@@ -526,36 +526,6 @@ class MultiClient(wx.Window):
 ##        from Funcs import FindFocusedChild
 ##        child = FindFocusedChild(self)
 ##        child.Bind(wx.EVT_KILL_FOCUS,self.OnChildKillFocus)
-
-class CloseButton(wx.Control):
-    def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
-                size=wx.DefaultSize):
-
-        wx.Control.__init__(self, parent, id, pos, size, style=wx.NO_BORDER)
-        self.Bind(wx.EVT_PAINT, self.on_paint)
-        self.Bind(wx.EVT_ERASE_BACKGROUND, self.on_erase_background)
-        self.Bind(wx.EVT_SIZE, self.on_size)
-
-    def on_paint(self, event):
-        dc = wx.PaintDC(self)
-        size = self.GetClientSize()
-
-        brush, pen, _, _ = self.GetParent().get_paint_tools()
-
-        dc.SetBrush(brush)
-        dc.SetPen(wx.TRANSPARENT_PEN)
-        dc.DrawRectangle(0, 0, size.x, size.y)
-        dc.SetPen(pen)
-        dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.DrawRectangle(0, 0, size.x, size.y)
-        dc.DrawLine(0, 0, size.x, size.y)
-        dc.DrawLine(0, size.y, size.x, 0)
-
-    def on_erase_background(self, event):
-        pass
-
-    def on_size(self, event):
-        self.Refresh()
 
 #----------------------------------------------------------------------
 
@@ -807,6 +777,47 @@ class MultiCloser(wx.Window):
         x,y,w,h = self.CalcSizePos(self.GetParent())
         self.SetSize(x,y,w,h)
 
+
+class TitleBarCloser(MultiCloser):
+    def OnPaint(self, event):
+        dc = wx.PaintDC(self)
+        size = self.GetClientSize()
+
+        brush, pen, _, _ = self.GetParent().get_paint_tools()
+
+        dc.SetBrush(brush)
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        dc.DrawRectangle(0, 0, size.x, size.y)
+        dc.SetPen(pen)
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.DrawRectangle(0, 0, size.x, size.y)
+        dc.DrawLine(0, 0, size.x, size.y)
+        dc.DrawLine(0, size.y, size.x, 0)
+
+    def OnLeave(self,evt):
+        self.entered = False
+
+    def OnEnter(self,evt):
+        self.entered = True
+
+    def OnRelease(self, evt):
+        if self.down and self.entered:
+            requested_close = self.ask_close()
+            if requested_close:
+                self.close()
+
+    def ask_close(self):
+        return True
+
+    def close(self):
+        self.GetGrandParent().DestroyLeaf()
+
+    def CalcSizePos(self,parent):
+        pw, ph = parent.GetSize()
+        w, h = parent.close_button_size
+        x = w - w - parent.title_bar_margin
+        y = (parent.title_bar_height - h) // 2
+        return (x, y, w, h)
 
 #----------------------------------------------------------------------
 
