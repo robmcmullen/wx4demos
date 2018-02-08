@@ -383,25 +383,31 @@ class MultiViewLeaf(wx.Window):
 
 class MultiClient(wx.Window):
     use_title_bar = True
+    use_close_button = True
 
     child_window_x = 2
     child_window_y = 2
 
     title_bar_height = 20
+    title_bar_margin = 3
     title_bar_font = wx.NORMAL_FONT
     title_bar_font_height = None
-    title_bar_x = 3
+    title_bar_x = None
     title_bar_y = None
 
     focused_color = wx.Colour(0x2e, 0xb5, 0xf4) # Blue
     focused_brush = None
     focused_text_color = wx.WHITE
+    focused_pen = None
 
     unfocused_color = None
+    unfocused_brush = None
     unfocused_text_color = wx.BLACK
-    focused_brush = None
+    unfocused_pen = None
 
     title_font = wx.NORMAL_FONT
+
+    close_button_size = (11, 11)
 
     def __init__(self,parent,childCls):
         w,h = self.CalcSize(parent)
@@ -410,6 +416,11 @@ class MultiClient(wx.Window):
                           size = (w,h),
                           style = wx.CLIP_CHILDREN | wx.SUNKEN_BORDER)
         self.setup_paint()
+
+        if self.use_close_button:
+            self.close_button = CloseButton(self, size=self.close_button_size)
+        else:
+            self.close_button = None
 
         self.child = childCls(self)
         self.move_child()
@@ -427,44 +438,44 @@ class MultiClient(wx.Window):
         cls.unfocused_color = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE)
         cls.focused_brush = wx.Brush(cls.focused_color, wx.SOLID)
         cls.unfocused_brush = wx.Brush(cls.unfocused_color, wx.SOLID)
+        cls.focused_pen = wx.Pen(cls.focused_text_color)
+        cls.unfocused_pen = wx.Pen(cls.unfocused_text_color)
 
         dc = wx.MemoryDC()
         dc.SetFont(cls.title_bar_font)
         cls.title_bar_font_height = max(dc.GetCharHeight(), 2)
+        cls.title_bar_x = cls.title_bar_margin
         cls.title_bar_y = (cls.title_bar_height - cls.title_bar_font_height) // 2
+
+    def get_paint_tools(self):
+        if self.selected:
+            brush = self.focused_brush
+            pen = self.focused_pen
+            text = self.focused_text_color
+            textbg = self.focused_color
+        else:
+            brush = self.unfocused_brush
+            pen = self.unfocused_pen
+            text = self.unfocused_text_color
+            textbg = self.unfocused_color
+        return brush, pen, text, textbg
 
     def OnPaint(self, event):
         dc = wx.PaintDC(self)
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetPen(wx.TRANSPARENT_PEN)
-        dc.SetFont(wx.NORMAL_FONT)
-        if self.selected:
-            dc.SetBrush(self.focused_brush)
-            dc.SetTextBackground(self.focused_color)
-            dc.SetTextForeground(self.focused_text_color)
-        else:
-            dc.SetBrush(self.unfocused_brush)
-            dc.SetTextBackground(self.unfocused_color)
-            dc.SetTextForeground(self.unfocused_text_color)
+        brush, _, text, textbg = self.get_paint_tools()
+        dc.SetBrush(brush)
 
         w, h = self.GetSize()
         if self.use_title_bar:
+            dc.SetFont(wx.NORMAL_FONT)
+            dc.SetTextBackground(textbg)
+            dc.SetTextForeground(text)
             dc.DrawRectangle(0, 0, w, self.title_bar_height)
             dc.DrawText(self.child.GetName(), self.title_bar_x, self.title_bar_y)
         else:
             dc.DrawRectangle(0, 0, w, h)
-
-        # dc.SetBrush(wx.WHITE_BRUSH)
-        # dc.SetPen(wx.WHITE_PEN)
-        # dc.DrawRectangle(0, 0, size.x, size.y)
-        # dc.SetPen(wx.LIGHT_GREY_PEN)
-        # dc.DrawLine(0, 0, size.x, size.y)
-        # dc.DrawLine(0, size.y, size.x, 0)
-        # dc.DrawText(s, (size.x-w)/2, (size.y-height*5)/2)
-        # pos = self.GetPosition()
-        # s = "Position: %d, %d" % (pos.x, pos.y)
-        # w, h = dc.GetTextExtent(s)
-        # dc.DrawText(s, (size.x-w)/2, ((size.y-(height*5))/2)+(height*3))
 
     def UnSelect(self):
         if self.selected:
@@ -491,6 +502,9 @@ class MultiClient(wx.Window):
         else:
             self.child.SetSize((w - 2 * self.child_window_x, h - 2 * self.child_window_y))
 
+        if self.use_close_button:
+            self.close_button.Move(w - self.close_button_size[0] - self.title_bar_margin, (self.title_bar_height - self.close_button_size[1]) // 2)
+
     def SetNewChildCls(self,childCls):
         if self.child:
             self.child.Destroy()
@@ -513,6 +527,35 @@ class MultiClient(wx.Window):
 ##        child = FindFocusedChild(self)
 ##        child.Bind(wx.EVT_KILL_FOCUS,self.OnChildKillFocus)
 
+class CloseButton(wx.Control):
+    def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
+                size=wx.DefaultSize):
+
+        wx.Control.__init__(self, parent, id, pos, size, style=wx.NO_BORDER)
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_ERASE_BACKGROUND, self.on_erase_background)
+        self.Bind(wx.EVT_SIZE, self.on_size)
+
+    def on_paint(self, event):
+        dc = wx.PaintDC(self)
+        size = self.GetClientSize()
+
+        brush, pen, _, _ = self.GetParent().get_paint_tools()
+
+        dc.SetBrush(brush)
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        dc.DrawRectangle(0, 0, size.x, size.y)
+        dc.SetPen(pen)
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.DrawRectangle(0, 0, size.x, size.y)
+        dc.DrawLine(0, 0, size.x, size.y)
+        dc.DrawLine(0, size.y, size.x, 0)
+
+    def on_erase_background(self, event):
+        pass
+
+    def on_size(self, event):
+        self.Refresh()
 
 #----------------------------------------------------------------------
 
