@@ -382,30 +382,98 @@ class MultiViewLeaf(wx.Window):
 
 
 class MultiClient(wx.Window):
+    use_title_bar = True
+
+    child_window_x = 2
+    child_window_y = 2
+
+    title_bar_height = 20
+    title_bar_font = wx.NORMAL_FONT
+    title_bar_font_height = None
+    title_bar_x = 3
+    title_bar_y = None
+
+    focused_color = wx.Colour(0x2e, 0xb5, 0xf4) # Blue
+    focused_brush = None
+    focused_text_color = wx.WHITE
+
+    unfocused_color = None
+    unfocused_text_color = wx.BLACK
+    focused_brush = None
+
+    title_font = wx.NORMAL_FONT
+
     def __init__(self,parent,childCls):
         w,h = self.CalcSize(parent)
         wx.Window.__init__(self,id = -1,parent = parent,
                           pos = (0,0),
                           size = (w,h),
                           style = wx.CLIP_CHILDREN | wx.SUNKEN_BORDER)
+        self.setup_paint()
+
         self.child = childCls(self)
-        self.child.Move(2,2)
-        self.normalColour = self.GetBackgroundColour()
+        self.move_child()
         self.selected = False
 
         self.Bind(wx.EVT_SET_FOCUS,self.OnSetFocus)
         self.Bind(wx.EVT_CHILD_FOCUS,self.OnChildFocus)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+
+    @classmethod
+    def setup_paint(cls):
+        if cls.title_bar_font_height is not None:
+            return
+
+        cls.unfocused_color = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE)
+        cls.focused_brush = wx.Brush(cls.focused_color, wx.SOLID)
+        cls.unfocused_brush = wx.Brush(cls.unfocused_color, wx.SOLID)
+
+        dc = wx.MemoryDC()
+        dc.SetFont(cls.title_bar_font)
+        cls.title_bar_font_height = max(dc.GetCharHeight(), 2)
+        cls.title_bar_y = (cls.title_bar_height - cls.title_bar_font_height) // 2
+
+    def OnPaint(self, event):
+        dc = wx.PaintDC(self)
+        dc.SetBackgroundMode(wx.SOLID)
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        dc.SetFont(wx.NORMAL_FONT)
+        if self.selected:
+            dc.SetBrush(self.focused_brush)
+            dc.SetTextBackground(self.focused_color)
+            dc.SetTextForeground(self.focused_text_color)
+        else:
+            dc.SetBrush(self.unfocused_brush)
+            dc.SetTextBackground(self.unfocused_color)
+            dc.SetTextForeground(self.unfocused_text_color)
+
+        w, h = self.GetSize()
+        if self.use_title_bar:
+            dc.DrawRectangle(0, 0, w, self.title_bar_height)
+            dc.DrawText(self.child.GetName(), self.title_bar_x, self.title_bar_y)
+        else:
+            dc.DrawRectangle(0, 0, w, h)
+
+        # dc.SetBrush(wx.WHITE_BRUSH)
+        # dc.SetPen(wx.WHITE_PEN)
+        # dc.DrawRectangle(0, 0, size.x, size.y)
+        # dc.SetPen(wx.LIGHT_GREY_PEN)
+        # dc.DrawLine(0, 0, size.x, size.y)
+        # dc.DrawLine(0, size.y, size.x, 0)
+        # dc.DrawText(s, (size.x-w)/2, (size.y-height*5)/2)
+        # pos = self.GetPosition()
+        # s = "Position: %d, %d" % (pos.x, pos.y)
+        # w, h = dc.GetTextExtent(s)
+        # dc.DrawText(s, (size.x-w)/2, ((size.y-(height*5))/2)+(height*3))
 
     def UnSelect(self):
         if self.selected:
             self.selected = False
-            self.SetBackgroundColour(self.normalColour)
             self.Refresh()
 
     def Select(self):
         self.GetParent().multiView.UnSelect()
         self.selected = True
-        self.SetBackgroundColour(wx.Colour(255,255,0)) # Yellow
         self.Refresh()
 
     def CalcSize(self,parent):
@@ -418,14 +486,23 @@ class MultiClient(wx.Window):
         w,h = self.CalcSize(self.GetParent())
         self.SetSize(0,0,w,h)
         w,h = self.GetClientSize()
-        self.child.SetSize((w-4,h-4))
+        if self.use_title_bar:
+            self.child.SetSize((w, h - self.title_bar_height))
+        else:
+            self.child.SetSize((w - 2 * self.child_window_x, h - 2 * self.child_window_y))
 
     def SetNewChildCls(self,childCls):
         if self.child:
             self.child.Destroy()
             self.child = None
         self.child = childCls(self)
-        self.child.Move(2,2)
+        self.move_child()
+
+    def move_child(self):
+        if self.use_title_bar:
+            self.child.Move(0, self.title_bar_height)
+        else:
+            self.child.Move(self.child_window_x, self.child_window_y)
 
     def OnSetFocus(self,evt):
         self.Select()
@@ -745,3 +822,51 @@ def DrawSash(win,x,y,direction):
         dc.DrawRectangle(x-2,y, 4,h)
 
     dc.EndDrawingOnTop()
+
+
+#For testing
+if __name__ == '__main__':
+    class SizeReportCtrl(wx.Control):
+
+        def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
+                    size=wx.DefaultSize):
+
+            wx.Control.__init__(self, parent, id, pos, size, style=wx.NO_BORDER)
+            self.Bind(wx.EVT_PAINT, self.OnPaint)
+            self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
+            self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        def OnPaint(self, event):
+            dc = wx.PaintDC(self)
+            size = self.GetClientSize()
+
+            s = "Size: %d x %d"%(size.x, size.y)
+
+            dc.SetFont(wx.NORMAL_FONT)
+            w, height = dc.GetTextExtent(s)
+            height += 3
+            dc.SetBrush(wx.WHITE_BRUSH)
+            dc.SetPen(wx.WHITE_PEN)
+            dc.DrawRectangle(0, 0, size.x, size.y)
+            dc.SetPen(wx.LIGHT_GREY_PEN)
+            dc.DrawLine(0, 0, size.x, size.y)
+            dc.DrawLine(0, size.y, size.x, 0)
+            dc.DrawText(s, (size.x-w)/2, (size.y-height*5)/2)
+            pos = self.GetPosition()
+            s = "Position: %d, %d" % (pos.x, pos.y)
+            w, h = dc.GetTextExtent(s)
+            dc.DrawText(s, (size.x-w)/2, ((size.y-(height*5))/2)+(height*3))
+
+        def OnEraseBackground(self, event):
+            pass
+
+        def OnSize(self, event):
+            self.Refresh()
+
+
+    app = wx.App()
+    frame = wx.Frame(None, -1, "Test", size=(400,400))
+    multi = MultiSash(frame, -1, pos = (0,0), size = (640,480))
+    multi.SetDefaultChildClass(SizeReportCtrl)
+    frame.Show(True)
+    app.MainLoop()
