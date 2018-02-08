@@ -299,7 +299,10 @@ class MultiViewLeaf(wx.Window):
         self.creatorHor = MultiCreator(self,MV_HOR)
         self.creatorVer = MultiCreator(self,MV_VER)
         self.detail = MultiClient(self,multiView._defChild)
-        self.closer = MultiCloser(self)
+        if self.detail.use_close_button:
+            self.closer = None
+        else:
+            self.closer = MultiCloser(self)
 
         self.Bind(wx.EVT_SIZE,self.OnSize)
 
@@ -373,7 +376,8 @@ class MultiViewLeaf(wx.Window):
                 self.creatorHor.OnSize(evt)
                 self.creatorVer.OnSize(evt)
                 self.detail.OnSize(evt)
-                self.closer.OnSize(evt)
+                if self.closer is not None:
+                    self.closer.OnSize(evt)
             except:
                 pass
         wx.CallAfter(doresize)
@@ -649,7 +653,9 @@ class MultiCreator(wx.Window):
             h = SH_SIZE
         else:
             x = pw - SH_SIZE
-            y = 4 + SH_SIZE             # Make provision for closer
+            y = 4
+            if not MultiClient.use_close_button:
+                y += SH_SIZE             # Make provision for closer
             w = SH_SIZE
             h = CR_SIZE
         return (x,y,w,h)
