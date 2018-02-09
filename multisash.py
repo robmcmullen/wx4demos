@@ -32,12 +32,20 @@ CR_SIZE = SH_SIZE * 3
 #----------------------------------------------------------------------
 
 class MultiSash(wx.Window):
+
+    wxEVT_CLIENT_CLOSE = wx.NewEventType()
+    EVT_CLIENT_CLOSE = wx.PyEventBinder(wxEVT_CLIENT_CLOSE, 1)
+
+    wxEVT_CLIENT_ACTIVATED = wx.NewEventType()
+    EVT_CLIENT_ACTIVATED = wx.PyEventBinder(wxEVT_CLIENT_ACTIVATED, 1)
+
     def __init__(self, *_args,**_kwargs):
         wx.Window.__init__(self, *_args, **_kwargs)
-        self._defChild = SizeReportCtrl  # EmptyChild
+        self._defChild = EmptyChild
         self.child = MultiSplit(self,self,(0,0),self.GetSize())
         self.Bind(wx.EVT_SIZE,self.OnMultiSize)
         self.last_direction = MV_VER
+        self.live_update = True
 
     def OnMultiSize(self,evt):
         self.child.SetSize(self.GetSize())
@@ -65,7 +73,7 @@ class MultiSash(wx.Window):
         self.OnMultiSize(None)
         self.child.OnSize(None)
 
-    def update_names(self):
+    def update_captions(self):
         self.Refresh()
 
     def find_uuid(self, uuid):
@@ -203,7 +211,7 @@ class MultiSplit(wx.Window):
                 self.view2.AddLeaf(control, direction, caller, pos)
         else:
             self.add_view2(control, direction, pos)
-        self.multiView.update_names()
+        self.multiView.update_captions()
 
     def add_view2(self, control, direction, pos=None):
         self.direction = direction
@@ -462,6 +470,7 @@ class MultiClient(wx.Window):
         if uuid is None:
             uuid = str(uuid4())
         self.child_uuid = uuid
+        self.selected = False
         self.setup_paint()
 
         if self.use_close_button:
@@ -472,11 +481,13 @@ class MultiClient(wx.Window):
         self.child = child
         self.child.Reparent(self)
         self.move_child()
-        self.selected = False
 
         self.Bind(wx.EVT_SET_FOCUS,self.OnSetFocus)
         self.Bind(wx.EVT_CHILD_FOCUS,self.OnChildFocus)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
+
+    def do_send_event(self, evt):
+        return not self.GetEventHandler().ProcessEvent(evt) or evt.IsAllowed()
 
     @classmethod
     def setup_paint(cls):
@@ -533,6 +544,9 @@ class MultiClient(wx.Window):
     def Select(self):
         self.GetParent().multiView.UnSelect()
         self.selected = True
+        evt = MultiSashEvent(MultiSash.wxEVT_CLIENT_ACTIVATED, self)
+        evt.SetChild(self.child)
+        self.do_send_event(evt)
         self.Refresh()
 
     def CalcSize(self,parent):
@@ -633,10 +647,20 @@ class MultiSizer(wx.Window):
 
     def OnMouseMove(self,evt):
         if self.isDrag:
-            DrawSash(self.dragTarget,self.px,self.py,self.side)
+            top = self.GetParent().multiView
+            if not top.live_update:
+                DrawSash(self.dragTarget,self.px,self.py,self.side)
             self.px,self.py = self.ClientToScreen((evt.x, evt.y))
             self.px,self.py = self.dragTarget.ScreenToClient((self.px,self.py))
-            DrawSash(self.dragTarget,self.px,self.py,self.side)
+            if top.live_update:
+                if self.side == MV_HOR:
+                    self.dragTarget.SizeLeaf(self.GetParent(),
+                                             self.py,not self.side)
+                else:
+                    self.dragTarget.SizeLeaf(self.GetParent(),
+                                             self.px,not self.side)
+            else:
+                DrawSash(self.dragTarget,self.px,self.py,self.side)
         else:
             evt.Skip()
 
@@ -721,10 +745,18 @@ class MultiCreator(wx.Window):
     def OnMouseMove(self,evt):
         if self.isDrag:
             parent = self.GetParent()
-            DrawSash(parent,self.px,self.py,self.side)
+            top = parent.multiView
+            if not top.live_update:
+                DrawSash(parent,self.px,self.py,self.side)
             self.px,self.py = self.ClientToScreen((evt.x, evt.y))
-            self.px,self.py = parent.ScreenToClient((self.px,self.py))
-            DrawSash(parent,self.px,self.py,self.side)
+            self.px,self.py = self.dragTarget.ScreenToClient((self.px,self.py))
+            if top.live_update:
+                if self.side == MV_HOR:
+                    parent.AddLeaf(None, MV_VER,self.py)
+                else:
+                    parent.AddLeaf(None, MV_HOR,self.px)
+            else:
+                DrawSash(parent,self.px,self.py,self.side)
         else:
             evt.Skip()
 
@@ -927,6 +959,128 @@ def DrawSash(win,x,y,direction):
         dc.DrawRectangle(x-2,y, 4,h)
 
     dc.EndDrawingOnTop()
+
+
+class MultiSashEvent(wx.PyCommandEvent):
+    """
+    This event class is almost the same as `wx.SplitterEvent` except
+    it adds an accessor for the sash index that is being changed.  The
+    same event type IDs and event binders are used as with
+    `wx.SplitterEvent`.
+    """
+    def __init__(self, type=wx.wxEVT_NULL, splitter=None):
+        """
+        Constructor.
+
+        Used internally by wxWidgets only.
+
+        :param `eventType`:
+        :type `eventType`: EventType
+        :param `splitter`:
+        :type `splitter`: SplitterWindow
+
+        """
+        wx.PyCommandEvent.__init__(self, type)
+        if splitter:
+            self.SetEventObject(splitter)
+            self.SetId(splitter.GetId())
+        self.child = None
+        self.isAllowed = True
+
+    def SetChild(self, child):
+        """
+        The MultiClient that is reporting the event
+
+        :param `client`: MultiClient instance
+
+        """
+        self.child = child
+
+    def GetChild(self):
+        """
+        The MultiClient that is reporting the event
+
+        :param `client`: MultiClient instance
+
+        """
+        return self.child
+
+    def SetSashPosition(self, pos):
+        """
+        In the case of ``wxEVT_SPLITTER_SASH_POS_CHANGED`` events, sets the
+        new sash position.
+
+        In the case of ``wxEVT_SPLITTER_SASH_POS_CHANGING`` events, sets the
+        new tracking bar position so visual feedback during dragging will
+        represent that change that will actually take place. Set to -1 from
+        the event handler code to prevent repositioning.
+
+        May only be called while processing ``wxEVT_SPLITTER_SASH_POS_CHANGING``
+        and ``wxEVT_SPLITTER_SASH_POS_CHANGED`` events.
+
+        :param int `pos`: New sash position.
+
+        """
+        self.sashPos = pos
+
+    def GetSashIdx(self):
+        """
+        Returns the new sash index.
+
+        May only be called while processing ``wxEVT_SPLITTER_SASH_POS_CHANGING``
+        and  ``wxEVT_SPLITTER_SASH_POS_CHANGED`` events.
+
+        :rtype: `int`
+
+        """
+        return self.sashIdx
+
+    def GetSashPosition(self):
+        """
+        Returns the new sash position.
+
+        May only be called while processing ``wxEVT_SPLITTER_SASH_POS_CHANGING``
+        and  ``wxEVT_SPLITTER_SASH_POS_CHANGED`` events.
+
+        :rtype: `int`
+
+        """
+        return self.sashPos
+
+    # methods from wx.NotifyEvent
+    def Veto(self):
+        """
+        Prevents the change announced by this event from happening.
+
+        It is in general a good idea to notify the user about the reasons
+        for vetoing the change because otherwise the applications behaviour
+        (which just refuses to do what the user wants) might be quite
+        surprising.
+
+        """
+        self.isAllowed = False
+
+    def Allow(self):
+        """
+        This is the opposite of :meth:`Veto` : it explicitly allows the
+        event to be processed.
+
+        For most events it is not necessary to call this method as the events
+        are allowed anyhow but some are forbidden by default (this will be
+        mentioned in the corresponding event description).
+
+        """
+        self.isAllowed = True
+
+    def IsAllowed(self):
+        """
+        Returns ``True`` if the change is allowed (:meth:`Veto` hasn't been
+        called) or ``False`` otherwise (if it was).
+
+        :rtype: `bool`
+
+        """
+        return self.isAllowed
 
 
 #For testing
