@@ -23,6 +23,12 @@ from uuid import uuid4
 
 import wx
 
+
+import logging
+log = logging.getLogger(__name__)
+resize_log = logging.getLogger("resize")
+
+
 MV_HOR = False
 MV_VER = True
 
@@ -166,16 +172,12 @@ class MultiSplit(wx.Window):
         if control is None:
             control = self.multiView._defChild(self)
         if not self.view2:
-            print("adding 1")
             self.add_view2(control, direction)
         elif isinstance(self.view2, MultiSplit):
-            print("adding 2")
             self.view2.add(control, direction)
         elif isinstance(self.view1, MultiSplit):
-            print("adding 3")
             self.view1.add(control, direction)
         else:
-            print("adding 4")
             self.AddLeaf(control, direction, self.view1)
 
     def GetSaveData(self):
@@ -357,7 +359,7 @@ class MultiSplit(wx.Window):
         x2,y2 = self.view2.GetPosition()
         w,h = self.GetSize()
         x, y = self.GetPosition()
-        print(x,y,w,h,"view1:",x1,y1,w1,h1,"view2:",x2,y2,w2,h2)
+        resize_log.debug(str((x,y,w,h,"view1:",x1,y1,w1,h1,"view2:",x2,y2,w2,h2)))
 
         if x1 != x2:
             ratio = float(w) / float((w1 + w2))
@@ -409,9 +411,9 @@ class MultiViewLeaf(wx.Window):
 
     def find_uuid(self, uuid):
         if uuid == self.detail.child_uuid:
-            print("found %s in %s" % (uuid, self.detail.child.GetName()))
+            log.debug("found %s in %s" % (uuid, self.detail.child.GetName()))
             return self.detail
-        print("skipping %s in %s" % (self.detail.child_uuid, self.detail.child.GetName()))
+        log.debug("skipping %s in %s" % (self.detail.child_uuid, self.detail.child.GetName()))
         return None
 
     def GetSaveData(self):
