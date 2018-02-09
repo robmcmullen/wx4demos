@@ -351,30 +351,32 @@ class MultiSplit(wx.Window):
             self.view1.SetSize(self.GetSize())
             self.view1.OnSize(None)
             return
-        v1w,v1h = self.view1.GetSize()
-        v2w,v2h = self.view2.GetSize()
-        v1x,v1y = self.view1.GetPosition()
-        v2x,v2y = self.view2.GetPosition()
+        w1,h1 = self.view1.GetSize()
+        w2,h2 = self.view2.GetSize()
+        x1,y1 = self.view1.GetPosition()
+        x2,y2 = self.view2.GetPosition()
         w,h = self.GetSize()
+        x, y = self.GetPosition()
+        print(x,y,w,h,"view1:",x1,y1,w1,h1,"view2:",x2,y2,w2,h2)
 
-        if v1x != v2x:
-            ratio = float(w) / float((v1w + v2w))
-            v1w *= ratio
-            v2w = w - v1w
-            v2x = v1w
+        if x1 != x2:
+            ratio = float(w) / float((w1 + w2))
+            w1 *= ratio
+            w2 = w - w1
+            x2 = w1
         else:
-            v1w = v2w = w
+            w1 = w2 = w
 
-        if v1y != v2y:
-            ratio = float(h) / float((v1h + v2h))
-            v1h *= ratio
-            v2h = h - v1h
-            v2y = v1h
+        if y1 != y2:
+            ratio = float(h) / float((h1 + h2))
+            h1 *= ratio
+            h2 = h - h1
+            y2 = h1
         else:
-            v1h = v2h = h
+            h1 = h2 = h
 
-        self.view1.SetSize(int(v1x), int(v1y), int(v1w), int(v1h))
-        self.view2.SetSize(int(v2x), int(v2y), int(v2w), int(v2h))
+        self.view1.SetSize(int(x1), int(y1), int(w1), int(h1))
+        self.view2.SetSize(int(x2), int(y2), int(w2), int(h2))
         self.view1.OnSize(None)
         self.view2.OnSize(None)
 
