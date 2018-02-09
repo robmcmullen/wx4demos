@@ -930,10 +930,22 @@ if __name__ == '__main__':
             self.SetName(s)
             self.Refresh()
 
+    def save_state(evt):
+        global multi
+
+        import pprint
+        pprint.pprint(multi.GetSaveData())
 
     app = wx.App()
     frame = wx.Frame(None, -1, "Test", size=(400,400))
     multi = MultiSash(frame, -1, pos = (0,0), size = (640,480))
     multi.SetDefaultChildClass(SizeReportCtrl)
+    sizer = wx.BoxSizer(wx.VERTICAL)
+    sizer.Add(multi, 1, wx.EXPAND)
+    btn = wx.Button(frame, -1, "Press to show save state")
+    sizer.Add(btn, 0, wx.EXPAND)
+    btn.Bind(wx.EVT_BUTTON, save_state)
+    frame.SetSizer(sizer)
+    frame.Layout()
     frame.Show(True)
     app.MainLoop()
