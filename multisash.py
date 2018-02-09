@@ -19,6 +19,7 @@
 # o wxMultiViewLeaf -> MultiViewLeaf
 #
 import json
+from uuid import uuid4
 
 import wx
 
@@ -34,13 +35,9 @@ CR_SIZE = SH_SIZE * 3
 class MultiSash(wx.Window):
     def __init__(self, *_args,**_kwargs):
         wx.Window.__init__(self, *_args, **_kwargs)
-        self._defChild = EmptyChild
+        self._defChild = SizeReportCtrl  # EmptyChild
         self.child = MultiSplit(self,self,(0,0),self.GetSize())
         self.Bind(wx.EVT_SIZE,self.OnMultiSize)
-
-    def SetDefaultChildClass(self,childCls):
-        self._defChild = childCls
-        self.child.DefaultChildChanged()
 
     def OnMultiSize(self,evt):
         self.child.SetSize(self.GetSize())
@@ -56,17 +53,11 @@ class MultiSash(wx.Window):
 
     def GetSaveData(self):
         saveData = {}
-        saveData['_defChild_class'] = self._defChild.__name__
-        saveData['_defChild_mod']   = self._defChild.__module__
         saveData['child'] = self.child.GetSaveData()
         return json.dumps(saveData, sort_keys=True, indent=4)
 
     def SetSaveData(self,data):
         data = json.loads(data)
-        mod = data['_defChild_mod']
-        dChild = mod + '.' + data['_defChild_class']
-        six.exec_('import %s' % mod)
-        self._defChild = eval(dChild)
         old = self.child
         self.child = MultiSplit(self,self,wx.Point(0,0),self.GetSize())
         self.child.SetSaveData(data['child'])
@@ -76,6 +67,14 @@ class MultiSash(wx.Window):
 
     def update_names(self):
         self.Refresh()
+
+    def find_uuid(self, uuid):
+        return self.child.find_uuid(uuid)
+
+    def focus_uuid(self, uuid):
+        found = self.find_uuid(uuid)
+        if found:
+            found.Select()
 
 
 #----------------------------------------------------------------------
@@ -97,6 +96,17 @@ class MultiSplit(wx.Window):
         self.direction = None
 
         self.Bind(wx.EVT_SIZE,self.OnSize)
+
+    def find_uuid(self, uuid):
+        if self.view1:
+            found = self.view1.find_uuid(uuid)
+            if found is not None:
+                return found
+        if self.view2:
+            found = self.view2.find_uuid(uuid)
+            if found is not None:
+                return found
+        return None
 
     def GetSaveData(self):
         saveData = {}
@@ -156,10 +166,6 @@ class MultiSplit(wx.Window):
             self.view1.UnSelect()
         if self.view2:
             self.view2.UnSelect()
-
-    def DefaultChildChanged(self):
-        if not self.view2:
-            self.view1.DefaultChildChanged()
 
     def AddLeaf(self,direction,caller,pos):
         if self.view2:
@@ -304,7 +310,7 @@ class MultiViewLeaf(wx.Window):
         self.sizerVer = MultiSizer(self,MV_VER)
         self.creatorHor = MultiCreator(self,MV_HOR)
         self.creatorVer = MultiCreator(self,MV_VER)
-        self.detail = MultiClient(self,multiView._defChild)
+        self.detail = MultiClient(self, multiView._defChild)
         if self.detail.use_close_button:
             self.closer = None
         else:
@@ -314,11 +320,15 @@ class MultiViewLeaf(wx.Window):
 
         self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DFACE))
 
+    def find_uuid(self, uuid):
+        if uuid == self.detail.child_uuid:
+            print("found %s in %s" % (uuid, self.detail.child.GetName()))
+            return self.detail
+        print("skipping %s in %s" % (self.detail.child_uuid, self.detail.child.GetName()))
+        return None
 
     def GetSaveData(self):
         saveData = {}
-        saveData['detailClass_class'] = self.detail.child.__class__.__name__
-        saveData['detailClass_mod'] = self.detail.child.__module__
         if hasattr(self.detail.child,'GetSaveData'):
             attr = getattr(self.detail.child,'GetSaveData')
             if callable(attr):
@@ -331,16 +341,14 @@ class MultiViewLeaf(wx.Window):
         v1,v2 = self.GetSize()
         saveData['w'] = v1
         saveData['h'] = v2
+        saveData['child_uuid'] = self.detail.child_uuid
         return saveData
 
     def SetSaveData(self,data):
-        mod = data['detailClass_mod']
-        dChild = mod + '.' + data['detailClass_class']
-        six.exec_('import %s' % mod)
-        detClass = eval(dChild)
         self.SetSize(data['x'],data['y'],data['w'],data['h'])
         old = self.detail
-        self.detail = MultiClient(self,detClass)
+        self.detail = MultiClient(self)
+        self.detail.child_uuid = data['child_uuid']
         dData = data.get('detail',None)
         if dData:
             if hasattr(self.detail.child,'SetSaveData'):
@@ -352,9 +360,6 @@ class MultiViewLeaf(wx.Window):
 
     def UnSelect(self):
         self.detail.UnSelect()
-
-    def DefaultChildChanged(self):
-        self.detail.SetNewChildCls(self.multiView._defChild)
 
     def AddLeaf(self,direction,pos):
         if pos < 10: return
@@ -419,12 +424,15 @@ class MultiClient(wx.Window):
 
     close_button_size = (11, 11)
 
-    def __init__(self,parent,childCls):
+    def __init__(self, parent, child_cls=None, uuid=None):
         w,h = self.CalcSize(parent)
         wx.Window.__init__(self,id = -1,parent = parent,
                           pos = (0,0),
                           size = (w,h),
                           style = wx.CLIP_CHILDREN | wx.SUNKEN_BORDER)
+        if uuid is None:
+            uuid = str(uuid4())
+        self.child_uuid = uuid
         self.setup_paint()
 
         if self.use_close_button:
@@ -432,7 +440,9 @@ class MultiClient(wx.Window):
         else:
             self.close_button = None
 
-        self.child = childCls(self)
+        if child_cls is None:
+            child_cls = parent.multiView._defChild
+        self.child = child_cls(self)
         self.move_child()
         self.selected = False
 
@@ -515,11 +525,12 @@ class MultiClient(wx.Window):
         if self.use_close_button:
             self.close_button.Move(w - self.close_button_size[0] - self.title_bar_margin, (self.title_bar_height - self.close_button_size[1]) // 2)
 
-    def SetNewChildCls(self,childCls):
+    def replace(self, child):
         if self.child:
             self.child.Destroy()
             self.child = None
-        self.child = childCls(self)
+        self.child = child
+        self.child.Reparent(self)
         self.move_child()
 
     def move_child(self):
@@ -892,6 +903,8 @@ def DrawSash(win,x,y,direction):
 
 #For testing
 if __name__ == '__main__':
+    import sys
+
     class SizeReportCtrl(wx.Control):
 
         def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
@@ -943,23 +956,60 @@ if __name__ == '__main__':
         state = text.GetValue()
         multi.SetSaveData(state)
 
+    def find_uuid(evt):
+        global multi, uuid_text
+
+        u = uuid_text.GetValue()
+        multi.focus_uuid(u)
+
+    def replace_uuid(u):
+        found = multi.find_uuid(u)
+        if found is not None:
+            test = EmptyChild(multi)
+            found.replace(test)
+
     app = wx.App()
     frame = wx.Frame(None, -1, "Test", size=(800,400))
     multi = MultiSash(frame, -1, pos = (0,0), size = (640,480))
-    multi.SetDefaultChildClass(SizeReportCtrl)
     sizer = wx.BoxSizer(wx.VERTICAL)
-    sizer.Add(multi, 1, wx.EXPAND)
-    btn = wx.Button(frame, -1, "Press to show save state")
-    sizer.Add(btn, 0, wx.EXPAND)
-    btn.Bind(wx.EVT_BUTTON, save_state)
-    btn = wx.Button(frame, -1, "Press to load save state")
-    sizer.Add(btn, 0, wx.EXPAND)
-    btn.Bind(wx.EVT_BUTTON, load_state)
     horz = wx.BoxSizer(wx.HORIZONTAL)
-    horz.Add(sizer, 1, wx.EXPAND)
+    horz.Add(multi, 1, wx.EXPAND)
     text = wx.TextCtrl(frame, -1, size=(400,400), style=wx.TE_MULTILINE)
     horz.Add(text, 0, wx.EXPAND)
-    frame.SetSizer(horz)
+    bsizer = wx.BoxSizer(wx.HORIZONTAL)
+    btn = wx.Button(frame, -1, "Show State")
+    bsizer.Add(btn, 0, wx.EXPAND)
+    btn.Bind(wx.EVT_BUTTON, save_state)
+    btn = wx.Button(frame, -1, "Load State")
+    bsizer.Add(btn, 0, wx.EXPAND)
+    btn.Bind(wx.EVT_BUTTON, load_state)
+    uuid_text = wx.TextCtrl(frame, -1)
+    bsizer.Add(uuid_text, 0, wx.EXPAND)
+    btn = wx.Button(frame, -1, "Find UUID")
+    bsizer.Add(btn, 0, wx.EXPAND)
+    btn.Bind(wx.EVT_BUTTON, find_uuid)
+
+    sizer.Add(horz, 1, wx.EXPAND)
+    sizer.Add(bsizer, 0, wx.EXPAND)
+    frame.SetSizer(sizer)
     frame.Layout()
     frame.Show(True)
+
+    try:
+        state = sys.argv[1]
+    except IndexError:
+        pass
+    else:
+        text = open(state, 'r').read()
+        print text
+        multi.SetSaveData(text)
+
+        try:
+            u = sys.argv[2]
+        except IndexError:
+            pass
+        else:
+            print("searching for %s" % u)
+            wx.CallAfter(replace_uuid, u)
+
     app.MainLoop()
