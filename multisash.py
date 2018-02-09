@@ -23,9 +23,8 @@ from uuid import uuid4
 
 import wx
 
-import six
-MV_HOR = 0
-MV_VER = not MV_HOR
+MV_HOR = 'h'
+MV_VER = 'v'
 
 SH_SIZE = 5
 CR_SIZE = SH_SIZE * 3
@@ -113,18 +112,18 @@ class MultiSplit(wx.Window):
         if self.view1:
             saveData['view1'] = self.view1.GetSaveData()
             if isinstance(self.view1,MultiSplit):
-                saveData['view1IsSplit'] = 1
+                saveData['split1'] = True
         if self.view2:
             saveData['view2'] = self.view2.GetSaveData()
             if isinstance(self.view2,MultiSplit):
-                saveData['view2IsSplit'] = 1
+                saveData['split2'] = True
         saveData['direction'] = self.direction
-        v1,v2 = self.GetPosition()
-        saveData['x'] = v1
-        saveData['y'] = v2
-        v1,v2 = self.GetSize()
-        saveData['w'] = v1
-        saveData['h'] = v2
+        x, y = self.GetPosition()
+        saveData['x'] = x
+        saveData['y'] = y
+        w, h = self.GetSize()
+        saveData['w'] = w
+        saveData['h'] = h
         return saveData
 
     def SetSaveData(self,data):
@@ -132,7 +131,7 @@ class MultiSplit(wx.Window):
         self.SetSize(int(data['x']), int(data['y']), int(data['w']), int(data['h']))
         v1Data = data.get('view1',None)
         if v1Data:
-            isSplit = data.get('view1IsSplit',None)
+            isSplit = data.get('split1',None)
             old = self.view1
             if isSplit:
                 self.view1 = MultiSplit(self.multiView,self,
@@ -145,7 +144,7 @@ class MultiSplit(wx.Window):
                 old.Destroy()
         v2Data = data.get('view2',None)
         if v2Data:
-            isSplit = data.get('view2IsSplit',None)
+            isSplit = data.get('split2',None)
             old = self.view2
             if isSplit:
                 self.view2 = MultiSplit(self.multiView,self,
@@ -335,12 +334,12 @@ class MultiViewLeaf(wx.Window):
                 dData = attr()
                 if dData:
                     saveData['detail'] = dData
-        v1,v2 = self.GetPosition()
-        saveData['x'] = v1
-        saveData['y'] = v2
-        v1,v2 = self.GetSize()
-        saveData['w'] = v1
-        saveData['h'] = v2
+        x, y = self.GetPosition()
+        saveData['x'] = x
+        saveData['y'] = y
+        w, h = self.GetSize()
+        saveData['w'] = w
+        saveData['h'] = h
         saveData['child_uuid'] = self.detail.child_uuid
         return saveData
 
@@ -946,14 +945,14 @@ if __name__ == '__main__':
             self.Refresh()
 
     def save_state(evt):
-        global multi, text
+        global multi, json_text
 
-        text.SetValue(multi.GetSaveData())
+        json_text.SetValue(multi.GetSaveData())
 
     def load_state(evt):
-        global multi, text
+        global multi, json_text
 
-        state = text.GetValue()
+        state = json_text.GetValue()
         multi.SetSaveData(state)
 
     def find_uuid(evt):
@@ -974,8 +973,8 @@ if __name__ == '__main__':
     sizer = wx.BoxSizer(wx.VERTICAL)
     horz = wx.BoxSizer(wx.HORIZONTAL)
     horz.Add(multi, 1, wx.EXPAND)
-    text = wx.TextCtrl(frame, -1, size=(400,400), style=wx.TE_MULTILINE)
-    horz.Add(text, 0, wx.EXPAND)
+    json_text = wx.TextCtrl(frame, -1, size=(400,400), style=wx.TE_MULTILINE)
+    horz.Add(json_text, 0, wx.EXPAND)
     bsizer = wx.BoxSizer(wx.HORIZONTAL)
     btn = wx.Button(frame, -1, "Show State")
     bsizer.Add(btn, 0, wx.EXPAND)
