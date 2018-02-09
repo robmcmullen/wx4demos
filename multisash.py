@@ -37,6 +37,7 @@ class MultiSash(wx.Window):
         self._defChild = SizeReportCtrl  # EmptyChild
         self.child = MultiSplit(self,self,(0,0),self.GetSize())
         self.Bind(wx.EVT_SIZE,self.OnMultiSize)
+        self.last_direction = MV_VER
 
     def OnMultiSize(self,evt):
         self.child.SetSize(self.GetSize())
@@ -75,6 +76,10 @@ class MultiSash(wx.Window):
         if found:
             found.Select()
 
+    def add(self, control):
+        self.last_direction = not self.last_direction
+        self.child.add(control, self.last_direction)
+
 
 #----------------------------------------------------------------------
 
@@ -106,6 +111,22 @@ class MultiSplit(wx.Window):
             if found is not None:
                 return found
         return None
+
+    def add(self, control=None, direction=MV_HOR):
+        if control is None:
+            control = self.multiView._defChild(self)
+        if not self.view2:
+            print("adding 1")
+            self.add_view2(control, direction)
+        elif isinstance(self.view2, MultiSplit):
+            print("adding 2")
+            self.view2.add(control, direction)
+        elif isinstance(self.view1, MultiSplit):
+            print("adding 3")
+            self.view1.add(control, direction)
+        else:
+            print("adding 4")
+            self.AddLeaf(control, direction, self.view1)
 
     def GetSaveData(self):
         saveData = {}
@@ -166,35 +187,40 @@ class MultiSplit(wx.Window):
         if self.view2:
             self.view2.UnSelect()
 
-    def AddLeaf(self,direction,caller,pos):
+    def AddLeaf(self, control, direction, caller, pos=None):
         if self.view2:
             if caller == self.view1:
                 self.view1 = MultiSplit(self.multiView,self,
                                           caller.GetPosition(),
                                           caller.GetSize(),
                                           caller)
-                self.view1.AddLeaf(direction,caller,pos)
+                self.view1.AddLeaf(control, direction, caller, pos)
             else:
                 self.view2 = MultiSplit(self.multiView,self,
                                           caller.GetPosition(),
                                           caller.GetSize(),
                                           caller)
-                self.view2.AddLeaf(direction,caller,pos)
+                self.view2.AddLeaf(control, direction, caller, pos)
         else:
-            self.direction = direction
-            w,h = self.GetSize()
-            if direction == MV_HOR:
-                x,y = (pos,0)
-                w1,h1 = (w-pos,h)
-                w2,h2 = (pos,h)
-            else:
-                x,y = (0,pos)
-                w1,h1 = (w,h-pos)
-                w2,h2 = (w,pos)
-            self.view2 = MultiViewLeaf(self.multiView, self, (x,y), (w1,h1))
-            self.view1.SetSize((w2,h2))
-            self.view2.OnSize(None)
+            self.add_view2(control, direction, pos)
         self.multiView.update_names()
+
+    def add_view2(self, control, direction, pos=None):
+        self.direction = direction
+        w,h = self.GetSize()
+        if pos is None:
+            pos = h // 2 if direction == MV_VER else w // 2
+        if direction == MV_HOR:
+            x,y = (pos,0)
+            w1,h1 = (w-pos,h)
+            w2,h2 = (pos,h)
+        else:
+            x,y = (0,pos)
+            w1,h1 = (w,h-pos)
+            w2,h2 = (w,pos)
+        self.view2 = MultiViewLeaf(self.multiView, self, (x,y), (w1,h1), control)
+        self.view1.SetSize((w2,h2))
+        self.view2.OnSize(None)
 
     def DestroyLeaf(self,caller):
         if not self.view2:              # We will only have 2 windows if
@@ -300,7 +326,7 @@ class MultiSplit(wx.Window):
 
 
 class MultiViewLeaf(wx.Window):
-    def __init__(self,multiView,parent,pos,size):
+    def __init__(self,multiView,parent,pos,size, child=None):
         wx.Window.__init__(self,id = -1,parent = parent,pos = pos,size = size,
                           style = wx.CLIP_CHILDREN)
         self.multiView = multiView
@@ -309,7 +335,9 @@ class MultiViewLeaf(wx.Window):
         self.sizerVer = MultiSizer(self,MV_VER)
         self.creatorHor = MultiCreator(self,MV_HOR)
         self.creatorVer = MultiCreator(self,MV_VER)
-        self.detail = MultiClient(self, multiView._defChild)
+        if child is None:
+            child = multiView._defChild(self)
+        self.detail = MultiClient(self, child)
         if self.detail.use_close_button:
             self.closer = None
         else:
@@ -360,14 +388,16 @@ class MultiViewLeaf(wx.Window):
     def UnSelect(self):
         self.detail.UnSelect()
 
-    def AddLeaf(self,direction,pos):
-        if pos < 10: return
+    def AddLeaf(self, control, direction, pos=None):
         w,h = self.GetSize()
+        if pos is None:
+            pos = h // 2 if direction == MV_VER else w // 2
+        if pos < 10: return
         if direction == MV_VER:
             if pos > h - 10: return
         else:
             if pos > w - 10: return
-        self.GetParent().AddLeaf(direction,self,pos)
+        self.GetParent().AddLeaf(control, direction, self, pos)
 
     def DestroyLeaf(self):
         self.GetParent().DestroyLeaf(self)
@@ -423,7 +453,7 @@ class MultiClient(wx.Window):
 
     close_button_size = (11, 11)
 
-    def __init__(self, parent, child_cls=None, uuid=None):
+    def __init__(self, parent, child, uuid=None):
         w,h = self.CalcSize(parent)
         wx.Window.__init__(self,id = -1,parent = parent,
                           pos = (0,0),
@@ -439,9 +469,8 @@ class MultiClient(wx.Window):
         else:
             self.close_button = None
 
-        if child_cls is None:
-            child_cls = parent.multiView._defChild
-        self.child = child_cls(self)
+        self.child = child
+        self.child.Reparent(self)
         self.move_child()
         self.selected = False
 
@@ -715,9 +744,9 @@ class MultiCreator(wx.Window):
             self.isDrag = False
 
             if self.side == MV_HOR:
-                parent.AddLeaf(MV_VER,self.py)
+                parent.AddLeaf(None, MV_VER,self.py)
             else:
-                parent.AddLeaf(MV_HOR,self.px)
+                parent.AddLeaf(None, MV_HOR,self.px)
         else:
             evt.Skip()
 
@@ -967,6 +996,10 @@ if __name__ == '__main__':
             test = EmptyChild(multi)
             found.replace(test)
 
+    def add_control(evt):
+        test = EmptyChild(multi)
+        multi.add(test)
+
     app = wx.App()
     frame = wx.Frame(None, -1, "Test", size=(800,400))
     multi = MultiSash(frame, -1, pos = (0,0), size = (640,480))
@@ -987,6 +1020,9 @@ if __name__ == '__main__':
     btn = wx.Button(frame, -1, "Find UUID")
     bsizer.Add(btn, 0, wx.EXPAND)
     btn.Bind(wx.EVT_BUTTON, find_uuid)
+    btn = wx.Button(frame, -1, "Add Control")
+    bsizer.Add(btn, 0, wx.EXPAND)
+    btn.Bind(wx.EVT_BUTTON, add_control)
 
     sizer.Add(horz, 1, wx.EXPAND)
     sizer.Add(bsizer, 0, wx.EXPAND)
