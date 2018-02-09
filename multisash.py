@@ -18,6 +18,7 @@
 # o wxMultiSplit -> MultiSplit
 # o wxMultiViewLeaf -> MultiViewLeaf
 #
+import json
 
 import wx
 
@@ -58,9 +59,10 @@ class MultiSash(wx.Window):
         saveData['_defChild_class'] = self._defChild.__name__
         saveData['_defChild_mod']   = self._defChild.__module__
         saveData['child'] = self.child.GetSaveData()
-        return saveData
+        return json.dumps(saveData, sort_keys=True, indent=4)
 
     def SetSaveData(self,data):
+        data = json.loads(data)
         mod = data['_defChild_mod']
         dChild = mod + '.' + data['_defChild_class']
         six.exec_('import %s' % mod)
@@ -931,13 +933,18 @@ if __name__ == '__main__':
             self.Refresh()
 
     def save_state(evt):
-        global multi
+        global multi, text
 
-        import pprint
-        pprint.pprint(multi.GetSaveData())
+        text.SetValue(multi.GetSaveData())
+
+    def load_state(evt):
+        global multi, text
+
+        state = text.GetValue()
+        multi.SetSaveData(state)
 
     app = wx.App()
-    frame = wx.Frame(None, -1, "Test", size=(400,400))
+    frame = wx.Frame(None, -1, "Test", size=(800,400))
     multi = MultiSash(frame, -1, pos = (0,0), size = (640,480))
     multi.SetDefaultChildClass(SizeReportCtrl)
     sizer = wx.BoxSizer(wx.VERTICAL)
@@ -945,7 +952,14 @@ if __name__ == '__main__':
     btn = wx.Button(frame, -1, "Press to show save state")
     sizer.Add(btn, 0, wx.EXPAND)
     btn.Bind(wx.EVT_BUTTON, save_state)
-    frame.SetSizer(sizer)
+    btn = wx.Button(frame, -1, "Press to load save state")
+    sizer.Add(btn, 0, wx.EXPAND)
+    btn.Bind(wx.EVT_BUTTON, load_state)
+    horz = wx.BoxSizer(wx.HORIZONTAL)
+    horz.Add(sizer, 1, wx.EXPAND)
+    text = wx.TextCtrl(frame, -1, size=(400,400), style=wx.TE_MULTILINE)
+    horz.Add(text, 0, wx.EXPAND)
+    frame.SetSizer(horz)
     frame.Layout()
     frame.Show(True)
     app.MainLoop()
