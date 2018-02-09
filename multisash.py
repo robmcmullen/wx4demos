@@ -23,8 +23,8 @@ from uuid import uuid4
 
 import wx
 
-MV_HOR = 'h'
-MV_VER = 'v'
+MV_HOR = False
+MV_VER = True
 
 SH_SIZE = 5
 CR_SIZE = SH_SIZE * 3
