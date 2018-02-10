@@ -600,22 +600,23 @@ class MultiClient(wx.Window):
             textbg = self.unfocused_color
         return brush, pen, text, textbg
 
-    def OnPaint(self, event):
-        dc = wx.PaintDC(self)
+    def draw_title_bar(self, dc):
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetPen(wx.TRANSPARENT_PEN)
         brush, _, text, textbg = self.get_paint_tools()
         dc.SetBrush(brush)
 
         w, h = self.GetSize()
+        dc.SetFont(wx.NORMAL_FONT)
+        dc.SetTextBackground(textbg)
+        dc.SetTextForeground(text)
+        dc.DrawRectangle(0, 0, w, self.title_bar_height)
+        dc.DrawText(self.child.GetName(), self.title_bar_x, self.title_bar_y)
+
+    def OnPaint(self, event):
         if self.use_title_bar:
-            dc.SetFont(wx.NORMAL_FONT)
-            dc.SetTextBackground(textbg)
-            dc.SetTextForeground(text)
-            dc.DrawRectangle(0, 0, w, self.title_bar_height)
-            dc.DrawText(self.child.GetName(), self.title_bar_x, self.title_bar_y)
-        else:
-            dc.DrawRectangle(0, 0, w, h)
+            dc = wx.PaintDC(self)
+            self.draw_title_bar(dc)
 
     def UnSelect(self):
         if self.selected:
@@ -962,6 +963,16 @@ class TitleBarButton(MultiCloser):
         self.order = order
         MultiCloser.__init__(self, parent)
 
+    def OnPaint(self, event):
+        dc = wx.PaintDC(self)
+        size = self.GetClientSize()
+
+        brush, pen, _, _ = self.GetParent().get_paint_tools()
+        self.draw_button(dc, size, brush, pen)
+
+    def draw_button(self, dc, size, brush, pen):
+        print("draw")
+
     def OnLeave(self,evt):
         self.entered = False
 
@@ -984,12 +995,7 @@ class TitleBarButton(MultiCloser):
 
 
 class TitleBarCloser(TitleBarButton):
-    def OnPaint(self, event):
-        dc = wx.PaintDC(self)
-        size = self.GetClientSize()
-
-        brush, pen, _, _ = self.GetParent().get_paint_tools()
-
+    def draw_button(self, dc, size, brush, pen):
         dc.SetBrush(brush)
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.DrawRectangle(0, 0, size.x, size.y)
@@ -1016,12 +1022,7 @@ class TitleBarCloser(TitleBarButton):
 
 
 class TitleBarSplitHor(TitleBarCloser):
-    def OnPaint(self, event):
-        dc = wx.PaintDC(self)
-        size = self.GetClientSize()
-
-        brush, pen, _, _ = self.GetParent().get_paint_tools()
-
+    def draw_button(self, dc, size, brush, pen):
         dc.SetBrush(brush)
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.DrawRectangle(0, 0, size.x, size.y)
@@ -1035,12 +1036,7 @@ class TitleBarSplitHor(TitleBarCloser):
 
 
 class TitleBarSplitVer(TitleBarCloser):
-    def OnPaint(self, event):
-        dc = wx.PaintDC(self)
-        size = self.GetClientSize()
-
-        brush, pen, _, _ = self.GetParent().get_paint_tools()
-
+    def draw_button(self, dc, size, brush, pen):
         dc.SetBrush(brush)
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.DrawRectangle(0, 0, size.x, size.y)
