@@ -117,17 +117,17 @@ class MultiSash(wx.Window):
             return True
         return False
 
-    def add(self, control, direction=None):
+    def add(self, control, u=None, direction=None):
         if direction is None:
             self.last_direction = not self.last_direction
             direction = self.last_direction
-        self.child.add(control, direction)
+        self.child.add(control, u, direction)
 
     def live_split(self, source, splitter, px, py, side):
         if side == MV_HOR:
-            drag_parent, drag_leaf = splitter.AddLeaf(None, MV_VER, py)
+            drag_parent, drag_leaf = splitter.AddLeaf(None, None, MV_VER, py)
         else:
-            drag_parent, drag_leaf = splitter.AddLeaf(None, MV_HOR, px)
+            drag_parent, drag_leaf = splitter.AddLeaf(None, None, MV_HOR, px)
         print(splitter, drag_parent, drag_leaf)
         if side == MV_HOR:
             creator = drag_leaf.creatorHor
@@ -193,17 +193,17 @@ class MultiSplit(wx.Window):
                 return found
         return None
 
-    def add(self, control=None, direction=MV_HOR):
+    def add(self, control=None, u=None, direction=MV_HOR):
         if control is None:
             control = self.multiView._defChild(self)
         if not self.view2:
-            self.add_view2(control, direction)
+            self.add_view2(control, u, direction)
         elif isinstance(self.view2, MultiSplit):
-            self.view2.add(control, direction)
+            self.view2.add(control, u, direction)
         elif isinstance(self.view1, MultiSplit):
-            self.view1.add(control, direction)
+            self.view1.add(control, u, direction)
         else:
-            self.AddLeaf(control, direction, self.view1)
+            self.AddLeaf(control, u, direction, self.view1)
 
     def get_layout(self):
         d = {}
@@ -253,14 +253,14 @@ class MultiSplit(wx.Window):
         if self.view2:
             self.view2.UnSelect()
 
-    def AddLeaf(self, control, direction, caller, pos=None):
+    def AddLeaf(self, control, u, direction, caller, pos=None):
         if self.view2:
             if caller == self.view1:
                 self.view1 = MultiSplit(self.multiView,self,
                                           caller.GetPosition(),
                                           caller.GetSize(),
                                           caller)
-                self.view1.AddLeaf(control, direction, caller, pos)
+                self.view1.AddLeaf(control, u, direction, caller, pos)
                 split = self.view1
                 view = split.view1
             else:
@@ -268,16 +268,16 @@ class MultiSplit(wx.Window):
                                           caller.GetPosition(),
                                           caller.GetSize(),
                                           caller)
-                self.view2.AddLeaf(control, direction, caller, pos)
+                self.view2.AddLeaf(control, u, direction, caller, pos)
                 split = self.view2
                 view = split.view1
         else:
-            view = self.add_view2(control, direction, pos)
+            view = self.add_view2(control, u, direction, pos)
             split = self
         self.multiView.update_captions()
         return split, view
 
-    def add_view2(self, control, direction, pos=None):
+    def add_view2(self, control, u, direction, pos=None):
         self.direction = direction
         w,h = self.GetSize()
         if pos is None:
@@ -290,7 +290,7 @@ class MultiSplit(wx.Window):
             x,y = (0,pos)
             w1,h1 = (w,h-pos)
             w2,h2 = (w,pos)
-        self.view2 = MultiViewLeaf(self.multiView, self, (x,y), (w1,h1), control)
+        self.view2 = MultiViewLeaf(self.multiView, self, (x,y), (w1,h1), control, u)
         self.view1.SetSize((w2,h2))
         self.view2.OnSize(None)
         return self.view2
@@ -409,7 +409,7 @@ class MultiSplit(wx.Window):
 
 
 class MultiViewLeaf(wx.Window):
-    def __init__(self,multiView,parent,pos,size, child=None):
+    def __init__(self,multiView,parent,pos,size, child=None, u=None):
         wx.Window.__init__(self,id = -1,parent = parent,pos = pos,size = size,
                           style = wx.CLIP_CHILDREN)
         self.multiView = multiView
@@ -419,7 +419,7 @@ class MultiViewLeaf(wx.Window):
         if not self.multiView.live_update:
             self.creatorHor = MultiCreator(self,MV_HOR)
             self.creatorVer = MultiCreator(self,MV_VER)
-        self.detail = MultiClient(self, child)
+        self.detail = MultiClient(self, child, u)
         if self.detail.use_close_button:
             self.closer = None
         else:
@@ -449,8 +449,7 @@ class MultiViewLeaf(wx.Window):
 
     def restore_layout(self, d):
         old = self.detail
-        self.detail = MultiClient(self, None)
-        self.detail.child_uuid = d['child_uuid']
+        self.detail = MultiClient(self, None, d['child_uuid'])
         dData = d.get('detail',None)
         if dData:
             if hasattr(self.detail.child,'restore_layout'):
@@ -466,7 +465,7 @@ class MultiViewLeaf(wx.Window):
     def get_multi_split(self):
         return self.GetParent()
 
-    def AddLeaf(self, control, direction, pos=None):
+    def AddLeaf(self, control, u, direction, pos=None):
         w,h = self.GetSize()
         if pos is None:
             pos = h // 2 if direction == MV_VER else w // 2
@@ -475,7 +474,7 @@ class MultiViewLeaf(wx.Window):
             if pos > h - 10: return
         else:
             if pos > w - 10: return
-        return self.GetParent().AddLeaf(control, direction, self, pos)
+        return self.GetParent().AddLeaf(control, u, direction, self, pos)
 
     def DestroyLeaf(self):
         self.GetParent().DestroyLeaf(self)
@@ -871,9 +870,9 @@ class MultiCreator(wx.Window):
                 DrawSash(parent,self.px,self.py,self.side)
 
                 if self.side == MV_HOR:
-                    parent.AddLeaf(None, MV_VER,self.py)
+                    parent.AddLeaf(None, None, MV_VER, self.py)
                 else:
-                    parent.AddLeaf(None, MV_HOR,self.px)
+                    parent.AddLeaf(None, None, MV_HOR, self.px)
             self.drag_target = None
             self.drag_leaf = None
         else:
@@ -1032,7 +1031,7 @@ class TitleBarSplitHor(TitleBarCloser):
         dc.DrawLine(size.x//2, 0, size.x//2, size.y)
 
     def do_action(self, evt):
-        self.splitter.AddLeaf(None, MV_HOR)
+        self.splitter.AddLeaf(None, None, MV_HOR)
 
 
 class TitleBarSplitVer(TitleBarCloser):
@@ -1046,7 +1045,7 @@ class TitleBarSplitVer(TitleBarCloser):
         dc.DrawLine(0, size.y//2, size.x, size.y//2)
 
     def do_action(self, evt):
-        self.splitter.AddLeaf(None, MV_VER)
+        self.splitter.AddLeaf(None, None, MV_VER)
 
 #----------------------------------------------------------------------
 
