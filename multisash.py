@@ -25,12 +25,15 @@ import wx
 
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 resize_log = logging.getLogger("resize")
+resize_log.setLevel(logging.DEBUG)
 
 
-MV_HOR = False
-MV_VER = True
+MV_HOR = 0
+MV_VER = 1
 
 SH_SIZE = 5
 CR_SIZE = SH_SIZE * 3
@@ -68,17 +71,31 @@ class MultiSash(wx.Window):
         old.Destroy()
         self.child.OnSize(None)
 
-    def GetSaveData(self):
-        saveData = {}
-        saveData['child'] = self.child.GetSaveData()
-        return json.dumps(saveData, sort_keys=True, indent=4)
+    def get_layout(self, to_json=False, pretty=False):
+        d = {'child': self.child.get_layout()}
+        if to_json:
+            if pretty:
+                d = json.dumps(d, sort_keys=True, indent=4)
+            else:
+                d = json.dumps(d)
+        return d
 
-    def SetSaveData(self,data):
-        data = json.loads(data)
+    def restore_layout(self, d):
+        try:
+            layout = d['child']
+        except TypeError:
+            d = json.loads(d)
+            layout = d['child']
         old = self.child
         self.child = MultiSplit(self,self,wx.Point(0,0),self.GetSize())
-        self.child.SetSaveData(data['child'])
-        old.Destroy()
+        try:
+            self.child.restore_layout(layout)
+        except KeyError, e:
+            log.error("Error loading layout: missing key %s. Restoring previous layout." % e.message)
+            self.child.Destroy()
+            self.child = old
+        else:
+            old.Destroy()
         self.OnMultiSize(None)
         self.child.OnSize(None)
 
@@ -92,6 +109,13 @@ class MultiSash(wx.Window):
         found = self.find_uuid(uuid)
         if found:
             found.Select()
+
+    def replace_by_uuid(self, control, u):
+        found = self.find_uuid(u)
+        if found is not None:
+            found.replace(control)
+            return True
+        return False
 
     def add(self, control, direction=None):
         if direction is None:
@@ -154,6 +178,7 @@ class MultiSplit(wx.Window):
             self.view1 = MultiViewLeaf(self.multiView,self,
                                          (0,0),self.GetSize())
         self.direction = None
+        self.ratio = 0.5
 
         self.Bind(wx.EVT_SIZE,self.OnSize)
 
@@ -180,58 +205,47 @@ class MultiSplit(wx.Window):
         else:
             self.AddLeaf(control, direction, self.view1)
 
-    def GetSaveData(self):
-        saveData = {}
+    def get_layout(self):
+        d = {}
+        d['direction'] = self.direction
         if self.view1:
-            saveData['view1'] = self.view1.GetSaveData()
+            d['view1'] = self.view1.get_layout()
             if isinstance(self.view1,MultiSplit):
-                saveData['split1'] = True
+                d['split1'] = True
         if self.view2:
-            saveData['view2'] = self.view2.GetSaveData()
+            d['view2'] = self.view2.get_layout()
             if isinstance(self.view2,MultiSplit):
-                saveData['split2'] = True
-        saveData['direction'] = self.direction
-        x, y = self.GetPosition()
-        saveData['x'] = x
-        saveData['y'] = y
-        w, h = self.GetSize()
-        saveData['w'] = w
-        saveData['h'] = h
-        return saveData
+                d['split2'] = True
+        d['ratio'] = self.calc_ratio()
+        return d
 
-    def SetSaveData(self,data):
-        self.direction = data['direction']
-        self.SetSize(int(data['x']), int(data['y']), int(data['w']), int(data['h']))
-        v1Data = data.get('view1',None)
+    def restore_layout(self,d):
+        self.direction = d['direction']
+        self.ratio = d['ratio']
+        w, h = self.GetSize()
+        v1Data = d.get('view1',None)
         if v1Data:
-            isSplit = data.get('split1',None)
+            isSplit = d.get('split1',None)
             old = self.view1
             if isSplit:
-                self.view1 = MultiSplit(self.multiView,self,
-                                          (0,0),self.GetSize())
+                self.view1 = MultiSplit(self.multiView,self, (0,0),self.GetSize())
             else:
-                self.view1 = MultiViewLeaf(self.multiView,self,
-                                             (0,0),self.GetSize())
-            self.view1.SetSaveData(v1Data)
+                self.view1 = MultiViewLeaf(self.multiView,self, (0,0),self.GetSize())
+            self.view1.restore_layout(v1Data)
             if old:
                 old.Destroy()
-        v2Data = data.get('view2',None)
+        v2Data = d.get('view2',None)
         if v2Data:
-            isSplit = data.get('split2',None)
+            isSplit = d.get('split2',None)
             old = self.view2
             if isSplit:
-                self.view2 = MultiSplit(self.multiView,self,
-                                          (0,0),self.GetSize())
+                self.view2 = MultiSplit(self.multiView,self, (0,0),self.GetSize())
             else:
-                self.view2 = MultiViewLeaf(self.multiView,self,
-                                             (0,0),self.GetSize())
-            self.view2.SetSaveData(v2Data)
+                self.view2 = MultiViewLeaf(self.multiView,self, (0,0),self.GetSize())
+            self.view2.restore_layout(v2Data)
             if old:
                 old.Destroy()
-        if self.view1:
-            self.view1.OnSize(None)
-        if self.view2:
-            self.view2.OnSize(None)
+        self.set_sizes_from_ratio(w, h)
 
     def UnSelect(self):
         if self.view1:
@@ -317,6 +331,39 @@ class MultiSplit(wx.Window):
             self.view2 = None
             self.Destroy()
 
+    def calc_ratio(self):
+        if self.view1 and self.view2:
+            w1, h1 = self.view1.GetSize()
+            w2, h2 = self.view2.GetSize()
+            if self.direction == MV_HOR:
+                ratio = 1.0 * w1 / (w1 + w2)
+            else:
+                ratio = 1.0 * h1 / (h1 + h2)
+        else:
+            ratio = 0.5
+        return ratio
+
+    def set_sizes_from_ratio(self, w, h):
+        if self.view1 and self.view2:
+            if self.direction == MV_HOR:
+                w1 = int(self.ratio * w)
+                w2 = w - w1
+                h1 = h2 = h
+                x2, y2 = w1, 0
+            else:
+                h1 = int(self.ratio * h)
+                h2 = h - h1
+                w1 = w2 = w
+                x2, y2 = 0, h1
+            self.view1.SetSize(0, 0, w1, h1)
+            self.view2.SetSize(x2, y2, w2, h2)
+        else:
+            self.view1.SetSize(0, 0, w, h)
+        if self.view1:
+            self.view1.OnSize(None)
+        if self.view2:
+            self.view2.OnSize(None)
+
     def CanSize(self,side,view):
         if self.SizeTarget(side,view):
             return True
@@ -341,46 +388,21 @@ class MultiSplit(wx.Window):
             if pos > w - 10: return
         else:
             if pos > h - 10: return
-        if side == MV_HOR:
-            self.view1.SetSize(0,0,pos,h)
-            self.view2.SetSize(pos,0,w-pos,h)
+        if w <= 0:
+            self.ratio = 0.5
+        elif side == MV_HOR:
+            self.ratio = 1.0 * pos / w
         else:
-            self.view1.SetSize(0,0,w,pos)
-            self.view2.SetSize(0,pos,w,h-pos)
+            self.ratio = 1.0 * pos / h
+        self.set_sizes_from_ratio(w, h)
 
     def OnSize(self,evt):
+        w,h = self.GetSize()
         if not self.view2:
-            self.view1.SetSize(self.GetSize())
+            self.view1.SetSize(0, 0, w, h)
             self.view1.OnSize(None)
             return
-        w1,h1 = self.view1.GetSize()
-        w2,h2 = self.view2.GetSize()
-        x1,y1 = self.view1.GetPosition()
-        x2,y2 = self.view2.GetPosition()
-        w,h = self.GetSize()
-        x, y = self.GetPosition()
-        resize_log.debug(str((x,y,w,h,"view1:",x1,y1,w1,h1,"view2:",x2,y2,w2,h2)))
-
-        if x1 != x2:
-            ratio = float(w) / float((w1 + w2))
-            w1 *= ratio
-            w2 = w - w1
-            x2 = w1
-        else:
-            w1 = w2 = w
-
-        if y1 != y2:
-            ratio = float(h) / float((h1 + h2))
-            h1 *= ratio
-            h2 = h - h1
-            y2 = h1
-        else:
-            h1 = h2 = h
-
-        self.view1.SetSize(int(x1), int(y1), int(w1), int(h1))
-        self.view2.SetSize(int(x2), int(y2), int(w2), int(h2))
-        self.view1.OnSize(None)
-        self.view2.OnSize(None)
+        self.set_sizes_from_ratio(w, h)
 
 
 #----------------------------------------------------------------------
@@ -397,8 +419,6 @@ class MultiViewLeaf(wx.Window):
         if not self.multiView.live_update:
             self.creatorHor = MultiCreator(self,MV_HOR)
             self.creatorVer = MultiCreator(self,MV_VER)
-        if child is None:
-            child = multiView._defChild(self)
         self.detail = MultiClient(self, child)
         if self.detail.use_close_button:
             self.closer = None
@@ -411,37 +431,30 @@ class MultiViewLeaf(wx.Window):
 
     def find_uuid(self, uuid):
         if uuid == self.detail.child_uuid:
-            log.debug("found %s in %s" % (uuid, self.detail.child.GetName()))
+            log.debug("find_uuid: found %s in %s" % (uuid, self.detail.child.GetName()))
             return self.detail
-        log.debug("skipping %s in %s" % (self.detail.child_uuid, self.detail.child.GetName()))
+        log.debug("find_uuid: skipping %s in %s" % (self.detail.child_uuid, self.detail.child.GetName()))
         return None
 
-    def GetSaveData(self):
-        saveData = {}
-        if hasattr(self.detail.child,'GetSaveData'):
-            attr = getattr(self.detail.child,'GetSaveData')
+    def get_layout(self):
+        d = {}
+        if hasattr(self.detail.child,'get_layout'):
+            attr = getattr(self.detail.child,'get_layout')
             if callable(attr):
                 dData = attr()
                 if dData:
-                    saveData['detail'] = dData
-        x, y = self.GetPosition()
-        saveData['x'] = x
-        saveData['y'] = y
-        w, h = self.GetSize()
-        saveData['w'] = w
-        saveData['h'] = h
-        saveData['child_uuid'] = self.detail.child_uuid
-        return saveData
+                    h['detail'] = dData
+        d['child_uuid'] = self.detail.child_uuid
+        return d
 
-    def SetSaveData(self,data):
-        self.SetSize(data['x'],data['y'],data['w'],data['h'])
+    def restore_layout(self, d):
         old = self.detail
-        self.detail = MultiClient(self)
-        self.detail.child_uuid = data['child_uuid']
-        dData = data.get('detail',None)
+        self.detail = MultiClient(self, None)
+        self.detail.child_uuid = d['child_uuid']
+        dData = d.get('detail',None)
         if dData:
-            if hasattr(self.detail.child,'SetSaveData'):
-                attr = getattr(self.detail.child,'SetSaveData')
+            if hasattr(self.detail.child,'restore_layout'):
+                attr = getattr(self.detail.child,'restore_layout')
                 if callable(attr):
                     attr(dData)
         old.Destroy()
@@ -519,7 +532,7 @@ class MultiClient(wx.Window):
 
     close_button_size = (11, 11)
 
-    def __init__(self, parent, child, uuid=None):
+    def __init__(self, parent, child=None, uuid=None):
         w,h = self.CalcSize(parent)
         wx.Window.__init__(self,id = -1,parent = parent,
                           pos = (0,0),
@@ -543,9 +556,12 @@ class MultiClient(wx.Window):
             button_index += 1
             self.buttons.append(TitleBarSplitVer(self, button_index))
 
+        if child is None:
+            child = top._defChild(self)
         self.child = child
         self.child.Reparent(self)
         self.move_child()
+        log.debug("Created client for %s" % self.child_uuid)
 
         self.Bind(wx.EVT_SET_FOCUS,self.OnSetFocus)
         self.Bind(wx.EVT_CHILD_FOCUS,self.OnChildFocus)
@@ -1264,13 +1280,13 @@ if __name__ == '__main__':
     def save_state(evt):
         global multi, json_text
 
-        json_text.SetValue(multi.GetSaveData())
+        json_text.SetValue(multi.get_layout(True, True))
 
     def load_state(evt):
         global multi, json_text
 
         state = json_text.GetValue()
-        multi.SetSaveData(state)
+        multi.restore_layout(state)
 
     def find_uuid(evt):
         global multi, uuid_text
@@ -1325,7 +1341,7 @@ if __name__ == '__main__':
     else:
         text = open(state, 'r').read()
         print text
-        multi.SetSaveData(text)
+        multi.restore_layout(text)
 
         try:
             u = sys.argv[2]
