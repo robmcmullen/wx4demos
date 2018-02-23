@@ -11,68 +11,7 @@ import numpy as np
 import numpy.random as rand
 
 import colormap
-
-
-class ColormapComboBox(wx.adv.OwnerDrawnComboBox):
-    def __init__(self, *args, **kwargs):
-        wx.adv.OwnerDrawnComboBox.__init__(self, *args, **kwargs)
-        self.colormap_names = colormap.list_colormaps()
-        self.line = np.arange(256, dtype=np.float32) / 255.0
-        self.height = 20
-        self.width = 256
-        self.array = np.empty((self.height, self.width, 3), dtype='uint8')
-        self.image = wx.ImageFromBuffer(self.width, self.height, self.array)
-        dc = wx.MemoryDC()
-        self.char_height = dc.GetCharHeight()
-        self.internal_spacing = 2
-        self.item_height = self.height + self.char_height + 2 * self.internal_spacing
-        self.item_width = self.width + 2 * self.internal_spacing
-        self.bitmap_x = self.internal_spacing
-        self.bitmap_y = self.char_height + self.internal_spacing
-
-    # Overridden from OwnerDrawnComboBox, called to draw each
-    # item in the list
-    def OnDrawItem(self, dc, rect, item, flags):
-        if item == wx.NOT_FOUND:
-            # painting the control, but there is no valid item selected yet
-            return
-
-        r = wx.Rect(*rect)  # make a copy
-
-        b = self.get_colormap_bitmap(item)
-        if flags & wx.adv.ODCB_PAINTING_CONTROL:
-            x = (r.width - self.item_width) // 2
-            y = (r.height - self.height) // 2
-            dc.DrawBitmap(b, r.x + x, r.y + y)
-        else:
-            dc.DrawText(self.colormap_names[item], r.x + self.bitmap_x, r.y)
-            dc.DrawBitmap(b, r.x + self.bitmap_x, r.y + self.bitmap_y)
-
-    def get_colormap_bitmap(self, index):
-        self.line = np.arange(256, dtype=np.float32)/ 255.0
-        colors = colormap.get_rgb_colors(self.colormap_names[index], self.line)
-        self.array[:,:,:] = colors
-        return wx.BitmapFromImage(self.image)
-
-    # Overridden from OwnerDrawnComboBox, called for drawing the
-    # background area of each item.
-    def OnDrawBackground(self, dc, rect, item, flags):
-        # If the item is selected, or its item # iseven, or we are painting the
-        # combo control itself, then use the default rendering.
-        if (flags & wx.adv.ODCB_PAINTING_CONTROL):
-            flags = flags & ~(wx.adv.ODCB_PAINTING_CONTROL | wx.adv.ODCB_PAINTING_SELECTED)
-        wx.adv.OwnerDrawnComboBox.OnDrawBackground(self, dc, rect, item, flags)
-
-    # Overridden from OwnerDrawnComboBox, should return the height
-    # needed to display an item in the popup, or -1 for default
-    def OnMeasureItem(self, item):
-        return self.item_height
-
-    # Overridden from OwnerDrawnComboBox.  Callback for item width, or
-    # -1 for default/undetermined
-    def OnMeasureItemWidth(self, item):
-        return self.item_width
-
+import colormap.ui_combobox
 
 class ImagePanel(wx.Panel):
     """ 
@@ -122,46 +61,18 @@ class DemoFrame(wx.Frame):
 
         self.SetMenuBar(MenuBar)
 
-        btn = wx.Button(self, label = "NewImage")
-        btn.Bind(wx.EVT_BUTTON, self.OnNewImage )
-
         self.Bind(wx.EVT_CLOSE, self.OnQuit)
 
-        self.colormap_names = colormap.list_colormaps()
-        self.colormap_index = 0
-
-        ##Create numpy array, and image from it
-        w = 256
-        h = 32
-        self.line = np.arange(256, dtype=np.float32)/ 255.0
-        colors = colormap.get_rgb_colors(self.colormap_names[self.colormap_index], self.line)
-        self.array = np.empty((h, w, 3), dtype='uint8')
-        self.array[:,:,:] = colors
-        print self.array.shape
-        image = wx.ImageFromBuffer(w, h, self.array)
-        #image = wx.Image("Images/cute_close_up.jpg")
-        self.Panel = ImagePanel(image, self)
         
-        c = ColormapComboBox(self, -1, "", choices=self.colormap_names, size=(300,30), style=wx.CB_READONLY)
+        c = colormap.ui_combobox.ColormapComboBox(self, -1, "", size=(300,30), style=wx.CB_READONLY)
         #c.Bind(wx.EVT_COMBOBOX, self.colormap_changed)
+        c.SetSelection(10)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(btn, 0, wx.ALIGN_CENTER|wx.ALL, 5)
-        sizer.Add(self.Panel, 1, wx.GROW)
         sizer.Add(c, 0, wx.ALIGN_CENTER|wx.ALL, 5)
 
         self.SetSizer(sizer)
 
-    def OnNewImage(self, event=None):
-        """
-        create a new image by changing underlying numpy array
-        """
-        self.colormap_index += 1
-        colors = colormap.get_rgb_colors(self.colormap_names[self.colormap_index], self.line)
-        self.array[:,:,:] = colors
-        self.Panel.Refresh()
-        
-        
     def OnQuit(self,Event):
         self.Destroy()
         
