@@ -57,15 +57,6 @@ class TestPanel(wx.Panel):
         # see http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
         # created by Andrea Gavana
  
-        # adjust widths for Linux (figured out by John Torres 
-        # http://article.gmane.org/gmane.comp.python.wxpython/67327)
-        if wx.Platform == '__WXGTK__':
-            client_x, client_y = self.ClientToScreen((0, 0))
-            border_width = client_x - rect.x
-            title_bar_height = client_y - rect.y
-            rect.width += (border_width * 2)
-            rect.height += title_bar_height + border_width
- 
         sx, sy = self.ClientToScreen((0, 0))
         rect.x += sx
         rect.y += sy
@@ -76,7 +67,7 @@ class TestPanel(wx.Panel):
         #Create a Bitmap that will hold the screenshot image later on
         #Note that the Bitmap must have a size big enough to hold the screenshot
         #-1 means using the current default colour depth
-        self.drag_bitmap = wx.EmptyBitmap(rect.width, rect.height)
+        self.drag_bitmap = wx.Bitmap(rect.width, rect.height)
  
         #Create a memory DC that will be used for actually taking the screenshot
         memDC = wx.MemoryDC()
