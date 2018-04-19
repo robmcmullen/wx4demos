@@ -32,11 +32,11 @@ class TestPanel(wx.Panel):
                                            size=(75, -1),
                                            style=wx.SP_ARROW_KEYS,
                                            min=1, max=24, initial=1)
-        self.overlayPenWidth.SetToolTip('Pen Width')
+        # self.overlayPenWidth.SetToolTip('Pen Width')
 
         from wx.lib.colourselect import ColourSelect
         self.overlayPenColor = ColourSelect(self, -1, colour=wx.BLUE)
-        self.overlayPenColor.SetToolTip('Pen Color')
+        # self.overlayPenColor.SetToolTip('Pen Color')
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.overlayPenWidth, 0, wx.ALL, 5)
@@ -58,38 +58,43 @@ class TestPanel(wx.Panel):
         # created by Andrea Gavana
  
         sx, sy = self.ClientToScreen((0, 0))
-        rect.x += sx
-        rect.y += sy
+        rect.x = sx
+        rect.y = sy
 
         #Create a DC for the whole screen area
         dcScreen = wx.ScreenDC()
+
+        print("trying screenDC subbitmap: %s" % str(rect))
+        self.drag_bitmap = dcScreen.GetAsBitmap().GetSubBitmap(rect)
  
-        #Create a Bitmap that will hold the screenshot image later on
-        #Note that the Bitmap must have a size big enough to hold the screenshot
-        #-1 means using the current default colour depth
-        self.drag_bitmap = wx.Bitmap(rect.width, rect.height)
- 
-        #Create a memory DC that will be used for actually taking the screenshot
-        memDC = wx.MemoryDC()
- 
-        #Tell the memory DC to use our Bitmap
-        #all drawing action on the memory DC will go to the Bitmap now
-        memDC.SelectObject(self.drag_bitmap)
- 
-        #Blit (in this case copy) the actual screen on the memory DC
-        #and thus the Bitmap
-        memDC.Blit( 0, #Copy to this X coordinate
-                    0, #Copy to this Y coordinate
-                    rect.width, #Copy this width
-                    rect.height, #Copy this height
-                    dcScreen, #From where do we copy?
-                    sx, #What's the X offset in the original DC?
-                    sy  #What's the Y offset in the original DC?
-                    )
- 
-        #Select the Bitmap out of the memory DC by selecting a new
-        #uninitialized Bitmap
-        memDC.SelectObject(wx.NullBitmap)
+        if not self.drag_bitmap.IsOk():
+            print("creating bitmap manually")
+            #Create a Bitmap that will hold the screenshot image later on
+            #Note that the Bitmap must have a size big enough to hold the screenshot
+            #-1 means using the current default colour depth
+            self.drag_bitmap = wx.Bitmap(rect.width, rect.height)
+     
+            #Create a memory DC that will be used for actually taking the screenshot
+            memDC = wx.MemoryDC()
+     
+            #Tell the memory DC to use our Bitmap
+            #all drawing action on the memory DC will go to the Bitmap now
+            memDC.SelectObject(self.drag_bitmap)
+     
+            #Blit (in this case copy) the actual screen on the memory DC
+            #and thus the Bitmap
+            memDC.Blit( 0, #Copy to this X coordinate
+                        0, #Copy to this Y coordinate
+                        rect.width, #Copy this width
+                        rect.height, #Copy this height
+                        dcScreen, #From where do we copy?
+                        sx, #What's the X offset in the original DC?
+                        sy  #What's the Y offset in the original DC?
+                        )
+     
+            #Select the Bitmap out of the memory DC by selecting a new
+            #uninitialized Bitmap
+            memDC.SelectObject(wx.NullBitmap)
 
 
     def OnLeftDown(self, event):
