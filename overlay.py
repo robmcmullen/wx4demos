@@ -6,6 +6,12 @@ import wx
 
 #---------------------------------------------------------------------------
 
+class TestPopup(wx.PopupWindow):
+    """Adds a bit of text and mouse movement to the wx.PopupWindow"""
+    def __init__(self, parent, style=wx.SIMPLE_BORDER):
+        wx.PopupWindow.__init__(self, parent, style)
+        self.SetBackgroundColour("CADET BLUE")
+ 
 
 class TestPanel(wx.Panel):
     def __init__(self, parent, log):
@@ -27,6 +33,7 @@ class TestPanel(wx.Panel):
         self.overlay = wx.Overlay()
 
         self.drag_bitmap = None
+        self.drag_window = None
 
         self.overlayPenWidth = wx.SpinCtrl(self, -1, value='',
                                            size=(75, -1),
@@ -95,6 +102,7 @@ class TestPanel(wx.Panel):
             #Select the Bitmap out of the memory DC by selecting a new
             #uninitialized Bitmap
             memDC.SelectObject(wx.NullBitmap)
+        return rect
 
 
     def OnLeftDown(self, event):
@@ -103,8 +111,15 @@ class TestPanel(wx.Panel):
         self.startPos = event.GetPosition()
         ## print('self.startPos:', self.startPos)
         self.SetFocus()
-        self.make_bitmap()
+        rect = self.make_bitmap()
         ## print('OnLeftDown')
+        self.drag_window = TestPopup(self)
+        pos = event.GetPosition()
+        x, y = self.ClientToScreen(pos)
+        rect.x = x
+        rect.y = y
+        self.drag_window.SetSize(rect)
+        self.drag_window.Show()
 
 
     def OnMouseMove(self, event):
@@ -146,10 +161,13 @@ class TestPanel(wx.Panel):
             # Draw the rectangle
             dc.DrawRectangle(rect)
 
-            dc.DrawBitmap(self.drag_bitmap, evtPos[0], evtPos[1])
+            #dc.DrawBitmap(self.drag_bitmap, evtPos[0], evtPos[1])
 
             del odc  # Make sure the odc is destroyed before the dc is.
             ## print('OnMouseMove')
+
+            pos = self.ClientToScreen(evtPos)
+            self.drag_window.SetPosition(pos)
 
 
     def OnLeftUp(self, event):
@@ -168,6 +186,9 @@ class TestPanel(wx.Panel):
         odc.Clear()
         del odc
         self.overlay.Reset()
+
+        self.drag_window.Destroy()
+        self.drag_window = None
         ## print('OnLeftUp')
 
 
