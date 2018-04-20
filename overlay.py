@@ -6,12 +6,74 @@ import wx
 
 #---------------------------------------------------------------------------
 
-class TestPopup(wx.PopupWindow):
+def calc_bitmap_of_window(win):
+    """ Takes a screenshot of the screen at give pos & size (rect). """
+    rect = win.GetRect()
+    print 'Taking screenshot... of %s' % str(rect)
+    # see http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
+    # created by Andrea Gavana
+
+    sx, sy = win.ClientToScreen((0, 0))
+    rect.x = sx
+    rect.y = sy
+
+    #Create a DC for the whole screen area
+    dcScreen = wx.ScreenDC()
+
+    print("trying screenDC subbitmap: %s" % str(rect))
+    drag_bitmap = dcScreen.GetAsBitmap().GetSubBitmap(rect)
+
+    if not drag_bitmap.IsOk():
+        print("creating bitmap manually")
+        #Create a Bitmap that will hold the screenshot image later on
+        #Note that the Bitmap must have a size big enough to hold the screenshot
+        #-1 means using the current default colour depth
+        drag_bitmap = wx.Bitmap(rect.width, rect.height)
+ 
+        #Create a memory DC that will be used for actually taking the screenshot
+        memDC = wx.MemoryDC()
+ 
+        #Tell the memory DC to use our Bitmap
+        #all drawing action on the memory DC will go to the Bitmap now
+        memDC.SelectObject(drag_bitmap)
+ 
+        #Blit (in this case copy) the actual screen on the memory DC
+        #and thus the Bitmap
+        memDC.Blit( 0, #Copy to this X coordinate
+                    0, #Copy to this Y coordinate
+                    rect.width, #Copy this width
+                    rect.height, #Copy this height
+                    dcScreen, #From where do we copy?
+                    sx, #What's the X offset in the original DC?
+                    sy  #What's the Y offset in the original DC?
+                    )
+ 
+        #Select the Bitmap out of the memory DC by selecting a new
+        #uninitialized Bitmap
+        memDC.SelectObject(wx.NullBitmap)
+    return rect, drag_bitmap
+
+
+class BitmapPopup(wx.PopupWindow):
     """Adds a bit of text and mouse movement to the wx.PopupWindow"""
-    def __init__(self, parent, style=wx.SIMPLE_BORDER):
+    def __init__(self, parent, pos, style=wx.SIMPLE_BORDER):
         wx.PopupWindow.__init__(self, parent, style)
         self.SetBackgroundColour("CADET BLUE")
- 
+        
+        rect, self.bitmap = calc_bitmap_of_window(parent)
+        x, y = self.ClientToScreen(pos)
+        rect.x = x
+        rect.y = y
+        self.SetSize(rect)
+        self.Show()
+
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+
+    def on_paint(self, evt):
+        dc = wx.PaintDC(self)
+        dc.DrawBitmap(self.bitmap, 0, 0)
+
+
 
 class TestPanel(wx.Panel):
     def __init__(self, parent, log):
@@ -32,7 +94,6 @@ class TestPanel(wx.Panel):
         self.endPos = None
         self.overlay = wx.Overlay()
 
-        self.drag_bitmap = None
         self.drag_window = None
 
         self.overlayPenWidth = wx.SpinCtrl(self, -1, value='',
@@ -57,69 +118,13 @@ class TestPanel(wx.Panel):
         self.OnSize()
 
 
-    def make_bitmap(self):
-        """ Takes a screenshot of the screen at give pos & size (rect). """
-        rect = self.GetRect()
-        print 'Taking screenshot... of %s' % str(rect)
-        # see http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
-        # created by Andrea Gavana
- 
-        sx, sy = self.ClientToScreen((0, 0))
-        rect.x = sx
-        rect.y = sy
-
-        #Create a DC for the whole screen area
-        dcScreen = wx.ScreenDC()
-
-        print("trying screenDC subbitmap: %s" % str(rect))
-        self.drag_bitmap = dcScreen.GetAsBitmap().GetSubBitmap(rect)
- 
-        if not self.drag_bitmap.IsOk():
-            print("creating bitmap manually")
-            #Create a Bitmap that will hold the screenshot image later on
-            #Note that the Bitmap must have a size big enough to hold the screenshot
-            #-1 means using the current default colour depth
-            self.drag_bitmap = wx.Bitmap(rect.width, rect.height)
-     
-            #Create a memory DC that will be used for actually taking the screenshot
-            memDC = wx.MemoryDC()
-     
-            #Tell the memory DC to use our Bitmap
-            #all drawing action on the memory DC will go to the Bitmap now
-            memDC.SelectObject(self.drag_bitmap)
-     
-            #Blit (in this case copy) the actual screen on the memory DC
-            #and thus the Bitmap
-            memDC.Blit( 0, #Copy to this X coordinate
-                        0, #Copy to this Y coordinate
-                        rect.width, #Copy this width
-                        rect.height, #Copy this height
-                        dcScreen, #From where do we copy?
-                        sx, #What's the X offset in the original DC?
-                        sy  #What's the Y offset in the original DC?
-                        )
-     
-            #Select the Bitmap out of the memory DC by selecting a new
-            #uninitialized Bitmap
-            memDC.SelectObject(wx.NullBitmap)
-        return rect
-
-
     def OnLeftDown(self, event):
         # Capture the mouse and save the starting posiiton for the rubber-band
         self.CaptureMouse()
         self.startPos = event.GetPosition()
         ## print('self.startPos:', self.startPos)
         self.SetFocus()
-        rect = self.make_bitmap()
-        ## print('OnLeftDown')
-        self.drag_window = TestPopup(self)
-        pos = event.GetPosition()
-        x, y = self.ClientToScreen(pos)
-        rect.x = x
-        rect.y = y
-        self.drag_window.SetSize(rect)
-        self.drag_window.Show()
+        self.drag_window = BitmapPopup(self, event.GetPosition())
 
 
     def OnMouseMove(self, event):
