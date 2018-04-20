@@ -1,56 +1,28 @@
-#!/usr/bin/env python
-
-from collections import OrderedDict
-
 import wx
 
-#---------------------------------------------------------------------------
 
 def calc_bitmap_of_window(win):
-    """ Takes a screenshot of the screen at give pos & size (rect). """
-    rect = win.GetRect()
-    print 'Taking screenshot... of %s' % str(rect)
+    # modified from a snipped that creates a screenshot of the entire desktop
     # see http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
     # created by Andrea Gavana
+    rect = win.GetRect()
 
     sx, sy = win.ClientToScreen((0, 0))
     rect.x = sx
     rect.y = sy
 
-    #Create a DC for the whole screen area
     dcScreen = wx.ScreenDC()
 
     try:
-        print("trying screenDC subbitmap: %s" % str(rect))
+        # print("trying screenDC subbitmap: %s" % str(rect))
         drag_bitmap = dcScreen.GetAsBitmap().GetSubBitmap(rect)
     except wx.wxAssertionError:
-        print("creating bitmap manually")
-        #Create a Bitmap that will hold the screenshot image later on
-        #Note that the Bitmap must have a size big enough to hold the screenshot
-        #-1 means using the current default colour depth
+        # print("creating bitmap manually")
         drag_bitmap = wx.Bitmap(rect.width, rect.height)
- 
-        #Create a memory DC that will be used for actually taking the screenshot
         memDC = wx.MemoryDC()
- 
-        #Tell the memory DC to use our Bitmap
-        #all drawing action on the memory DC will go to the Bitmap now
         memDC.SelectObject(drag_bitmap)
- 
-        #Blit (in this case copy) the actual screen on the memory DC
-        #and thus the Bitmap
-        memDC.Blit( 0, #Copy to this X coordinate
-                    0, #Copy to this Y coordinate
-                    rect.width, #Copy this width
-                    rect.height, #Copy this height
-                    dcScreen, #From where do we copy?
-                    sx, #What's the X offset in the original DC?
-                    sy  #What's the Y offset in the original DC?
-                    )
- 
-        #Select the Bitmap out of the memory DC by selecting a new
-        #uninitialized Bitmap
-        memDC.SelectObject(wx.NullBitmap)
+        memDC.Blit(0, 0, rect.width, rect.height, dcScreen, sx, sy)
+        memDC.SelectObject(wx.NullBitmap)  # sync data to bitmap
     return rect, drag_bitmap
 
 
@@ -129,9 +101,10 @@ class DockingRectangleHandler(object):
         odc = wx.DCOverlay(self.overlay, dc)
         odc.Clear()
 
-        if wx.Platform == "__WXGTK__":
-            # Copy background to overlay; otherwise the overlay seems to be
-            # black? I don't know what I'm doing wrong to need this hack.
+        if wx.Platform != "__WXMAC__":
+            # Win & linux need this hack: copy background to overlay; otherwise
+            # the overlay seems to be black? I don't know what's up with this
+            # platform difference
             dc.DrawBitmap(self.drag_window.bitmap, 0, 0)
 
         # Mac already using GCDC
