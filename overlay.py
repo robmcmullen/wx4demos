@@ -20,10 +20,10 @@ def calc_bitmap_of_window(win):
     #Create a DC for the whole screen area
     dcScreen = wx.ScreenDC()
 
-    print("trying screenDC subbitmap: %s" % str(rect))
-    drag_bitmap = dcScreen.GetAsBitmap().GetSubBitmap(rect)
-
-    if not drag_bitmap.IsOk():
+    try:
+        print("trying screenDC subbitmap: %s" % str(rect))
+        drag_bitmap = dcScreen.GetAsBitmap().GetSubBitmap(rect)
+    except wx.wxAssertionError:
         print("creating bitmap manually")
         #Create a Bitmap that will hold the screenshot image later on
         #Note that the Bitmap must have a size big enough to hold the screenshot
