@@ -129,9 +129,10 @@ class DockingRectangleHandler(object):
         odc = wx.DCOverlay(self.overlay, dc)
         odc.Clear()
 
-        # Copy background to overlay; otherwise the overlay seems to be black?
-        # I don't know what I'm doing wrong to need this hack.
-        dc.DrawBitmap(self.drag_window.bitmap, 0, 0)
+        if wx.Platform == "__WXGTK__":
+            # Copy background to overlay; otherwise the overlay seems to be
+            # black? I don't know what I'm doing wrong to need this hack.
+            dc.DrawBitmap(self.drag_window.bitmap, 0, 0)
 
         # Mac already using GCDC
         if 'wxMac' not in wx.PlatformInfo and self.use_transparency:
