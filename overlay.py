@@ -94,8 +94,8 @@ class TestPanel(wx.Panel):
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.startPos = None
         self.endPos = None
-        self.overlay = wx.Overlay()
-
+        self.overlay = None
+        self.docking_rectangles = []
         self.drag_window = None
 
         self.overlayPenWidth = wx.SpinCtrl(self, -1, value='',
@@ -129,18 +129,37 @@ class TestPanel(wx.Panel):
         self.drag_window = BitmapPopup(self, event.GetPosition())
         self.overlay = wx.Overlay()
         self.overlay.Reset()
+        self.create_docking_rectangles()
 
+    def create_docking_rectangles(self):
+        rects = []
+        for win in [self]:
+            rects.extend(self.create_docking_rectangle_for_window(win))
+        self.docking_rectangles = rects
+
+    def create_docking_rectangle_for_window(self, win):
+        rects = []
+        win_rect = win.GetClientRect()
+        w = win_rect.width // 4
+        h = win_rect.height // 4
+        t = win_rect.x + win_rect.height - h
+        r = win_rect.y + win_rect.width - w
+        rects.append(wx.Rect(win_rect.x, win_rect.y, w, win_rect.height))
+        rects.append(wx.Rect(win_rect.x, win_rect.y, win_rect.width, h))
+        rects.append(wx.Rect(r, win_rect.y, w, win_rect.height))
+        rects.append(wx.Rect(win_rect.x, t, win_rect.width, h))
+        return rects
 
     def OnMouseMove(self, event):
         if event.Dragging() and event.LeftIsDown():
-            evtPos = event.GetPosition()
+            pos = event.GetPosition()
 
-            try:
-                rect = wx.Rect(topLeft=self.startPos, bottomRight=evtPos)
-            except TypeError as exc:  # topLeft = NoneType. Attempting to double click image or something
-                return
-            except Exception as exc:
-                raise exc
+            for rect in self.docking_rectangles:
+                if rect.Contains(pos):
+                    break
+            else:
+                print("NOT IN RECT")
+                rect = None
 
             # Draw the rubber-band rectangle using an overlay so it
             # will manage keeping the rectangle and the former window
@@ -170,11 +189,12 @@ class TestPanel(wx.Panel):
             dc.SetBrush(wx.Brush(bc))
 
             # Draw the rectangle
-            dc.DrawRectangle(rect)
+            if rect is not None:
+                dc.DrawRectangle(rect)
 
             #dc.DrawBitmap(self.drag_bitmap, evtPos[0], evtPos[1])
 
-            pos = self.ClientToScreen(evtPos)
+            pos = self.ClientToScreen(pos)
             self.drag_window.SetPosition(pos)
 
             del odc  # Make sure the odc is destroyed before the dc is.
