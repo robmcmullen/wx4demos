@@ -74,6 +74,100 @@ class BitmapPopup(wx.PopupWindow):
         dc.DrawBitmap(self.bitmap, 0, 0)
 
 
+class DockingRectangleHandler(object):
+    def __init__(self):
+        self.use_transparency = True
+        self.overlay = None
+        self.docking_rectangles = []
+        self.event_window = None
+        self.drag_window = None
+        self.pen = wx.Pen(wx.BLUE)
+        brush_color = wx.Colour(0xb0, 0xb0, 0xff, 0x80)
+        self.brush = wx.Brush(brush_color)
+
+    def start_docking(self, event_window, drag_window, event):
+        # Capture the mouse and save the starting posiiton for the rubber-band
+        event_window.CaptureMouse()
+        event_window.SetFocus()
+        self.event_window = event_window
+        self.drag_window = BitmapPopup(drag_window, event.GetPosition())
+        self.overlay = wx.Overlay()
+        self.overlay.Reset()
+        self.create_docking_rectangles(self.event_window)
+
+    def create_docking_rectangles(self, event_window):
+        rects = []
+        for win in [event_window]:
+            rects.extend(self.create_docking_rectangle_for_window(win))
+        self.docking_rectangles = rects
+
+    def create_docking_rectangle_for_window(self, win):
+        rects = []
+        win_rect = win.GetClientRect()
+        w = win_rect.width // 4
+        h = win_rect.height // 4
+        t = win_rect.x + win_rect.height - h
+        r = win_rect.y + win_rect.width - w
+        rects.append(wx.Rect(win_rect.x, win_rect.y, w, win_rect.height))
+        rects.append(wx.Rect(win_rect.x, win_rect.y, win_rect.width, h))
+        rects.append(wx.Rect(r, win_rect.y, w, win_rect.height))
+        rects.append(wx.Rect(win_rect.x, t, win_rect.width, h))
+        return rects
+
+    def process_dragging(self, event):
+        pos = event.GetPosition()
+
+        for rect in self.docking_rectangles:
+            print("checking %s in rect %s" % (pos, rect))
+            if rect.Contains(pos):
+                break
+        else:
+            print("NOT IN RECT")
+            rect = None
+
+        dc = wx.ClientDC(self.event_window)
+        odc = wx.DCOverlay(self.overlay, dc)
+        odc.Clear()
+
+        # Copy background to overlay; otherwise the overlay seems to be black?
+        # I don't know what I'm doing wrong to need this hack.
+        dc.DrawBitmap(self.drag_window.bitmap, 0, 0)
+
+        # Mac already using GCDC
+        if 'wxMac' not in wx.PlatformInfo and self.use_transparency:
+            dc = wx.GCDC(dc)
+
+        if rect is not None:
+            dc.SetPen(self.pen)
+            dc.SetBrush(self.brush)
+            dc.DrawRectangle(rect)
+
+        pos = self.event_window.ClientToScreen(pos)
+        self.drag_window.SetPosition(pos)
+
+        del odc  # Make sure the odc is destroyed before the dc is.
+
+
+    def cleanup_docking(self, evt):
+        if self.event_window.HasCapture():
+            self.event_window.ReleaseMouse()
+        pos = evt.GetPosition()
+
+        # When the mouse is released we reset the overlay and it
+        # restores the former content to the window.
+        dc = wx.ClientDC(self.event_window)
+        odc = wx.DCOverlay(self.overlay, dc)
+        odc.Clear()
+        del odc
+        self.overlay.Reset()
+        self.overlay = None
+
+        self.drag_window.Destroy()
+        self.drag_window = None
+        self.event_window.Refresh()  # Force redraw
+
+        return pos
+
 
 class TestPanel(wx.Panel):
     def __init__(self, parent, log):
@@ -92,11 +186,7 @@ class TestPanel(wx.Panel):
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
-        self.startPos = None
-        self.endPos = None
-        self.overlay = None
-        self.docking_rectangles = []
-        self.drag_window = None
+        self.dock_handler = DockingRectangleHandler()
 
         self.overlayPenWidth = wx.SpinCtrl(self, -1, value='',
                                            size=(75, -1),
@@ -119,109 +209,15 @@ class TestPanel(wx.Panel):
 
         self.OnSize()
 
-
     def OnLeftDown(self, event):
-        # Capture the mouse and save the starting posiiton for the rubber-band
-        self.CaptureMouse()
-        self.startPos = event.GetPosition()
-        ## print('self.startPos:', self.startPos)
-        self.SetFocus()
-        self.drag_window = BitmapPopup(self, event.GetPosition())
-        self.overlay = wx.Overlay()
-        self.overlay.Reset()
-        self.create_docking_rectangles()
-
-    def create_docking_rectangles(self):
-        rects = []
-        for win in [self]:
-            rects.extend(self.create_docking_rectangle_for_window(win))
-        self.docking_rectangles = rects
-
-    def create_docking_rectangle_for_window(self, win):
-        rects = []
-        win_rect = win.GetClientRect()
-        w = win_rect.width // 4
-        h = win_rect.height // 4
-        t = win_rect.x + win_rect.height - h
-        r = win_rect.y + win_rect.width - w
-        rects.append(wx.Rect(win_rect.x, win_rect.y, w, win_rect.height))
-        rects.append(wx.Rect(win_rect.x, win_rect.y, win_rect.width, h))
-        rects.append(wx.Rect(r, win_rect.y, w, win_rect.height))
-        rects.append(wx.Rect(win_rect.x, t, win_rect.width, h))
-        return rects
+        self.dock_handler.start_docking(self, self, event)
 
     def OnMouseMove(self, event):
         if event.Dragging() and event.LeftIsDown():
-            pos = event.GetPosition()
-
-            for rect in self.docking_rectangles:
-                if rect.Contains(pos):
-                    break
-            else:
-                print("NOT IN RECT")
-                rect = None
-
-            # Draw the rubber-band rectangle using an overlay so it
-            # will manage keeping the rectangle and the former window
-            # contents separate.
-            dc = wx.ClientDC(self)
-            odc = wx.DCOverlay(self.overlay, dc)
-            odc.Clear()
-
-            dc.DrawBitmap(self.drag_window.bitmap, 0, 0)
-
-            # # Mac's DC is already the same as a GCDC, and it causes
-            # # problems with the overlay if we try to use an actual
-            # # wx.GCDC so don't try it.  If you do not need to use a
-            # # semi-transparent background then you can leave this out.
-            if 'wxMac' not in wx.PlatformInfo:
-                dc = wx.GCDC(dc)
-
-            # Set the pen, for the box's border
-            dc.SetPen(wx.Pen(colour=self.overlayPenColor.GetColour(),
-                             width=self.overlayPenWidth.GetValue(),
-                             style=wx.PENSTYLE_SOLID))
-
-            # Create a brush (for the box's interior) with the same colour,
-            # but 50% transparency.
-            bc = self.overlayPenColor.GetColour()
-            bc = wx.Colour(bc.red, bc.green, bc.blue, 0x80)
-            dc.SetBrush(wx.Brush(bc))
-
-            # Draw the rectangle
-            if rect is not None:
-                dc.DrawRectangle(rect)
-
-            #dc.DrawBitmap(self.drag_bitmap, evtPos[0], evtPos[1])
-
-            pos = self.ClientToScreen(pos)
-            self.drag_window.SetPosition(pos)
-
-            del odc  # Make sure the odc is destroyed before the dc is.
-            ## print('OnMouseMove')
-
+            self.dock_handler.process_dragging(event)
 
     def OnLeftUp(self, event):
-        if self.HasCapture():
-            self.ReleaseMouse()
-        self.endPos = event.GetPosition()
-        ## print('StartPos: %s' %self.startPos)
-        ## print('EndPos: %s' %self.endPos)
-        self.startPos = None
-        self.endPos = None
-
-        # When the mouse is released we reset the overlay and it
-        # restores the former content to the window.
-        dc = wx.ClientDC(self)
-        odc = wx.DCOverlay(self.overlay, dc)
-        odc.Clear()
-        del odc
-        self.overlay.Reset()
-
-        self.drag_window.Destroy()
-        self.drag_window = None
-        self.Refresh()
-        ## print('OnLeftUp')
+        self.dock_handler.cleanup_docking(event)
 
 
     def OnSize(self, event=None):
