@@ -61,7 +61,7 @@ class BitmapPopup(wx.PopupWindow):
         self.SetBackgroundColour("CADET BLUE")
         
         rect, self.bitmap = calc_bitmap_of_window(parent)
-        x, y = self.ClientToScreen(pos)
+        x, y = parent.ClientToScreen(pos)
         rect.x = x
         rect.y = y
         self.SetSize(rect)
@@ -82,8 +82,10 @@ class TestPanel(wx.Panel):
 
         ## self.SetDoubleBuffered(True)
 
-        self.background = wx.Brush(self.GetBackgroundColour())
+        self.background = wx.Brush(wx.WHITE)
+        self.SetBackgroundColour(wx.RED)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
         #--Rubberband Overlay
@@ -125,6 +127,8 @@ class TestPanel(wx.Panel):
         ## print('self.startPos:', self.startPos)
         self.SetFocus()
         self.drag_window = BitmapPopup(self, event.GetPosition())
+        self.overlay = wx.Overlay()
+        self.overlay.Reset()
 
 
     def OnMouseMove(self, event):
@@ -145,10 +149,12 @@ class TestPanel(wx.Panel):
             odc = wx.DCOverlay(self.overlay, dc)
             odc.Clear()
 
-            # Mac's DC is already the same as a GCDC, and it causes
-            # problems with the overlay if we try to use an actual
-            # wx.GCDC so don't try it.  If you do not need to use a
-            # semi-transparent background then you can leave this out.
+            dc.DrawBitmap(self.drag_window.bitmap, 0, 0)
+
+            # # Mac's DC is already the same as a GCDC, and it causes
+            # # problems with the overlay if we try to use an actual
+            # # wx.GCDC so don't try it.  If you do not need to use a
+            # # semi-transparent background then you can leave this out.
             if 'wxMac' not in wx.PlatformInfo:
                 dc = wx.GCDC(dc)
 
@@ -168,11 +174,11 @@ class TestPanel(wx.Panel):
 
             #dc.DrawBitmap(self.drag_bitmap, evtPos[0], evtPos[1])
 
-            del odc  # Make sure the odc is destroyed before the dc is.
-            ## print('OnMouseMove')
-
             pos = self.ClientToScreen(evtPos)
             self.drag_window.SetPosition(pos)
+
+            del odc  # Make sure the odc is destroyed before the dc is.
+            ## print('OnMouseMove')
 
 
     def OnLeftUp(self, event):
@@ -194,6 +200,7 @@ class TestPanel(wx.Panel):
 
         self.drag_window.Destroy()
         self.drag_window = None
+        self.Refresh()
         ## print('OnLeftUp')
 
 
@@ -209,8 +216,9 @@ class TestPanel(wx.Panel):
 
         dc = wx.MemoryDC()
         dc.SelectObject(self.buffer)
-        dc.SetBackground(self.background)
-        dc.Clear()
+        dc.SetBrush(wx.WHITE_BRUSH)
+        dc.SetPen(wx.WHITE_PEN)
+        dc.DrawRectangle(0, 0, x, y)
 
         dc.SetFont(wx.Font(wx.FontInfo(18)))
         dc.DrawText('Drag the mouse on this window.', 325, 100)
@@ -220,7 +228,21 @@ class TestPanel(wx.Panel):
         #self.Update()
 
     def OnPaint(self, event):
-        dc = wx.BufferedPaintDC(self, self.buffer)
+        dc = wx.PaintDC(self)
+        rect = self.GetClientRect()
+        dc.DestroyClippingRegion()
+        dc.SetClippingRegion(rect)
+        print("painting", rect, dc.GetClippingRect())
+        dc.SetBrush(wx.WHITE_BRUSH)
+        dc.SetPen(wx.WHITE_PEN)
+        dc.DrawRectangle(rect)
+
+        dc.SetFont(wx.Font(wx.FontInfo(18)))
+        dc.DrawText('Drag the mouse on this window.', 325, 100)
+        event.Skip()
+
+    def OnEraseBackground(self, evt):
+        pass
 
 
 if __name__ == "__main__":
