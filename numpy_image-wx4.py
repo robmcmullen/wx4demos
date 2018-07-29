@@ -67,7 +67,7 @@ class DemoFrame(wx.Frame):
         self.array = rand.randint(0, 255, (h, w, 3)).astype('uint8')
         self.array = np.zeros((h, w, 3), dtype='uint8')
         self.array[:,:,0] = 128
-        print self.array.shape
+        print(self.array.shape)
         image = wx.ImageFromBuffer(w, h, self.array)
         #image = wx.Image("Images/cute_close_up.jpg")
         self.Panel = ImagePanel(image, self)

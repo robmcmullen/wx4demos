@@ -30,11 +30,11 @@ class TriPaneWindow(wx.ScrolledWindow):
         """ 
         For Debug... 
         """ 
-        print 
-        print "Title " + str(self)
-        print "Position " + str(self.GetPosition()) 
-        print "Size " + str(self.GetSize()) 
-        print "VirtualSize " + str(self.GetVirtualSize()) 
+        print() 
+        print("Title " + str(self))
+        print("Position " + str(self.GetPosition())) 
+        print("Size " + str(self.GetSize())) 
+        print("VirtualSize " + str(self.GetVirtualSize())) 
         event.Skip() 
         
                       
@@ -97,7 +97,7 @@ class TriPaneWindow(wx.ScrolledWindow):
             dy = event.GetPosition()
         
         pos = (dx ,dy) 
-        print "scrolling..." + str(pos) + str(event.GetPosition())
+        print("scrolling..." + str(pos) + str(event.GetPosition()))
         # self.mainPanel.Scroll(dx, dy) 
         # self.topPanel.Scroll(dx, 0) 
         # self.leftPanel.Scroll(0, dy) 
@@ -123,8 +123,8 @@ class MyCanvas(wx.ScrolledCanvas):
         """ 
         OnSize event callback. Currently not used 
         """ 
-        print "Size " + str(self.GetSize()) 
-        print "VirtualSize " + str(self.GetVirtualSize())
+        print("Size " + str(self.GetSize())) 
+        print("VirtualSize " + str(self.GetVirtualSize()))
         size = self.GetSize()
         vsize = self.GetVirtualSize()
         if self.use_x and self.use_y:
@@ -160,7 +160,7 @@ class MyCanvas(wx.ScrolledCanvas):
             #PaintRectangle(rect, dc)
             r.append("rect: %s" % str(rect))
             upd.Next()
-        print s, (posX, posY), (vbX, vbY), " ".join(r)
+        print(s, (posX, posY), (vbX, vbY), " ".join(r))
         dc.SetLogicalOrigin(posX, posY)
 
         dc.SetFont(wx.NORMAL_FONT)
@@ -175,12 +175,12 @@ class MyCanvas(wx.ScrolledCanvas):
         dc.DrawText(s, (size.x-w)/2, (size.y-height*5)/2)
       
     def OnClickEvent(self, event): 
-        print 
-        print "Title " + str(self)
-        print "Position " + str(self.GetPosition()) 
-        print "ViewStart " + str(self.GetViewStart()) 
-        print "Size " + str(self.GetSize()) 
-        print "VirtualSize " + str(self.GetVirtualSize()) 
+        print() 
+        print("Title " + str(self))
+        print("Position " + str(self.GetPosition())) 
+        print("ViewStart " + str(self.GetViewStart())) 
+        print("Size " + str(self.GetSize())) 
+        print("VirtualSize " + str(self.GetVirtualSize())) 
 
 
 class MyApp(wx.App): 
@@ -202,7 +202,7 @@ class MyApp(wx.App):
         frame.Show() 
         # self.SetTopWindow(frame) 
         
-        print "wx.VERSION = " + wx.VERSION_STRING 
+        print("wx.VERSION = " + wx.VERSION_STRING) 
         return True 
         
 #For testing 

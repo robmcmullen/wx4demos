@@ -37,9 +37,9 @@ class HexGridWindow(wx.ScrolledWindow):
         self.Bind(wx.EVT_SIZE, self.on_size)
 
     def on_size(self, event ):
-        print "Size " + str(self.GetSize())
-        print "VirtualSize " + str(self.GetVirtualSize())
-        print "ClientSize " + str(self.GetClientSize())
+        print("Size " + str(self.GetSize()))
+        print("VirtualSize " + str(self.GetVirtualSize()))
+        print("ClientSize " + str(self.GetClientSize()))
         event.Skip()
        
     def set_pane_sizes(self, width, height, left_width, top_height):
@@ -72,7 +72,7 @@ class HexGridWindow(wx.ScrolledWindow):
             dy = event.GetPosition()
        
         pos = (dx ,dy)
-        print "scrolling..." + str(pos) + str(event.GetPosition())
+        print("scrolling..." + str(pos) + str(event.GetPosition()))
         # self.main.Scroll(dx, dy)
         # self.top.Scroll(dx, 0)
         # self.left.Scroll(0, dy)
@@ -82,7 +82,7 @@ class HexGridWindow(wx.ScrolledWindow):
         # self.main.SetScrollPos(wx.HORIZONTAL, col)
         # self.main.SetScrollPos(wx.VERTICAL, row)
         self.Scroll(col, row)
-        print("viewport: %d,%d" % (row, col))
+        print(("viewport: %d,%d" % (row, col)))
         self.main.Refresh()
 
 
@@ -168,20 +168,20 @@ class HexGridHeader(wx.ScrolledCanvas):
         sx, sy = self.parent.GetViewStart()
         row2 = ForceBetween(sy, row, sy + self.fully_visible_rows - 1)
         col2 = ForceBetween(sx, col, sx + self.fully_visible_cells - 1)
-        print("clamp: before=%d,%d after=%d,%d" % (row, col, row2, col2))
+        print(("clamp: before=%d,%d after=%d,%d" % (row, col, row2, col2)))
         return row2, col2
 
     def ensure_visible(self, row, col):
         sx, sy = self.parent.GetViewStart()
         sy2 = ForceBetween(max(0, row - self.visible_rows), sy, row)
         sx2 = ForceBetween(max(0, col - self.visible_cells), sx, col)
-        print("ensure_visible: before=%d,%d after=%d,%d" % (sy, sx, sy2, sx2))
+        print(("ensure_visible: before=%d,%d after=%d,%d" % (sy, sx, sy2, sx2)))
         self.parent.move_viewport(sy2, sx2)
 
     def on_size(self, event ):
-        print "Size " + str(self.GetSize())
-        print "VirtualSize " + str(self.GetVirtualSize())
-        print "ClientSize " + str(self.GetClientSize())
+        print("Size " + str(self.GetSize()))
+        print("VirtualSize " + str(self.GetVirtualSize()))
+        print("ClientSize " + str(self.GetClientSize()))
         size = self.GetSize()
         vsize = self.GetVirtualSize()
         if self.use_x and self.use_y:
@@ -247,7 +247,7 @@ class HexGridHeader(wx.ScrolledCanvas):
         screenX, screenY = wx.GetMousePosition()
         x, y = self.ScreenToClient((screenX, screenY))
         row, cell = self.pixel_pos_to_row_cell(x, y)
-        print("on_timer: time=%f pos=%d,%d" % (time.time(), row, cell))
+        print(("on_timer: time=%f pos=%d,%d" % (time.time(), row, cell)))
         self.handle_on_motion(event, row, cell)
 
     def is_left_of_screen(self, sx, col):
@@ -304,11 +304,11 @@ class HexGridHeader(wx.ScrolledCanvas):
         if not self.HasCapture():
             return
         self.ReleaseMouse()
-        print
-        print "Title " + str(self)
-        print "Position " + str(self.GetPosition())
-        print "Size " + str(self.GetSize())
-        print "VirtualSize " + str(self.GetVirtualSize())
+        print()
+        print("Title " + str(self))
+        print("Position " + str(self.GetPosition()))
+        print("Size " + str(self.GetSize()))
+        print("VirtualSize " + str(self.GetVirtualSize()))
 
     def handle_on_motion(self, evt, row, col):
         scroll_row = 0
@@ -326,7 +326,7 @@ class HexGridHeader(wx.ScrolledCanvas):
         elif self.is_below_screen(sy, row):
             if self.can_scroll():
                 scroll_row = self.handle_below_screen(row)
-        print("scroll delta: %d, %d" % (scroll_row, scroll_col))
+        print(("scroll delta: %d, %d" % (scroll_row, scroll_col)))
         #row, col = self.main.clamp_row_col(row, col)
         row += scroll_row
         col += scroll_col
@@ -405,7 +405,7 @@ class MyApp(wx.App):
         frame.Show()
         # self.SetTopWindow(frame)
        
-        print "wx.VERSION = " + wx.VERSION_STRING
+        print("wx.VERSION = " + wx.VERSION_STRING)
         return True
 
     def do_redraw(self, evt):

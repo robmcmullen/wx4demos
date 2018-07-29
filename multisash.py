@@ -90,7 +90,7 @@ class MultiSash(wx.Window):
         self.child = MultiSplit(self,self,wx.Point(0,0),self.GetSize())
         try:
             self.child.restore_layout(layout)
-        except KeyError, e:
+        except KeyError as e:
             log.error("Error loading layout: missing key %s. Restoring previous layout." % e.message)
             self.child.Destroy()
             self.child = old
@@ -136,13 +136,13 @@ class MultiSash(wx.Window):
             drag_parent, drag_leaf = splitter.AddLeaf(None, None, MV_VER, py)
         else:
             drag_parent, drag_leaf = splitter.AddLeaf(None, None, MV_HOR, px)
-        print(splitter, drag_parent, drag_leaf)
+        print((splitter, drag_parent, drag_leaf))
         if side == MV_HOR:
             creator = drag_leaf.creatorHor
         else:
             creator = drag_leaf.creatorVer
         creator.drag_parent, creator.drag_leaf = drag_parent, drag_leaf 
-        print("start_live_update", source, creator, creator.drag_parent, creator.drag_leaf)
+        print(("start_live_update", source, creator, creator.drag_parent, creator.drag_leaf))
         creator.isDrag = True
         self.live_update_control = creator
         self.CaptureMouse()
@@ -152,7 +152,7 @@ class MultiSash(wx.Window):
             creator = self.live_update_control
             px, py = creator.ClientToScreen((evt.x, evt.y))
             px, py = creator.GetParent().ScreenToClient((px, py))
-            print("motion", px, py, self.HasCapture(), self.GetCapture(), self.GetCapture() == self)
+            print(("motion", px, py, self.HasCapture(), self.GetCapture(), self.GetCapture() == self))
             if creator.side == MV_HOR:
                 creator.drag_parent.SizeLeaf(creator.drag_leaf, py,not creator.side)
             else:
@@ -1365,7 +1365,7 @@ if __name__ == '__main__':
         pass
     else:
         text = open(state, 'r').read()
-        print text
+        print(text)
         multi.restore_layout(text)
 
         try:
@@ -1373,7 +1373,7 @@ if __name__ == '__main__':
         except IndexError:
             pass
         else:
-            print("searching for %s" % u)
+            print(("searching for %s" % u))
             wx.CallAfter(replace_uuid, u)
 
     app.MainLoop()

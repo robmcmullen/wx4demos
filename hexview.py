@@ -494,7 +494,7 @@ class FixedFontDataWindow(wx.ScrolledWindow):
             self.sy = self.table.num_rows - self.sh
             self.cy = self.table.num_rows
         else:
-            print("Position:", event.GetPosition(), "old:", self.sy, self.GetViewStart())
+            print(("Position:", event.GetPosition(), "old:", self.sy, self.GetViewStart()))
             self.sy = event.GetPosition()
 
         self.VertBoundaries()
@@ -840,7 +840,7 @@ class HexTable(object):
         self.start_offset = start_addr & start_offset_mask if start_offset_mask else 0
         self.num_rows = ((self.start_offset + len(self.data) - 1) / bytes_per_row) + 1
         self.last_valid_index = len(self.data)
-        print(self.data, self.num_rows, self.start_offset, self.start_addr)
+        print((self.data, self.num_rows, self.start_offset, self.start_addr))
         self.calc_cells(col_widths)
         self.calc_labels()
 

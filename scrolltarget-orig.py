@@ -30,11 +30,11 @@ class TriPaneWindow(wx.ScrolledWindow):
         """ 
         For Debug... 
         """ 
-        print 
-        print "Title " + str(self)
-        print "Position " + str(self.GetPosition()) 
-        print "Size " + str(self.GetSize()) 
-        print "VirtualSize " + str(self.GetVirtualSize()) 
+        print() 
+        print("Title " + str(self))
+        print("Position " + str(self.GetPosition())) 
+        print("Size " + str(self.GetSize())) 
+        print("VirtualSize " + str(self.GetVirtualSize())) 
         event.Skip() 
         
                       
@@ -97,7 +97,7 @@ class TriPaneWindow(wx.ScrolledWindow):
             dy = event.GetPosition()
         
         pos = (dx ,dy) 
-        print "scrolling..." + str(pos) + str(event.GetPosition())
+        print("scrolling..." + str(pos) + str(event.GetPosition()))
         # self.mainPanel.Scroll(dx, dy) 
         # self.topPanel.Scroll(dx, 0) 
         # self.leftPanel.Scroll(0, dy) 
@@ -107,8 +107,8 @@ class TriPaneWindow(wx.ScrolledWindow):
         """ 
         OnSize event callback. Currently not used 
         """ 
-        print "Size " + str(self.GetSize()) 
-        print "VirtualSize " + str(self.GetVirtualSize()) 
+        print("Size " + str(self.GetSize())) 
+        print("VirtualSize " + str(self.GetVirtualSize())) 
         #self.Layout() 
 
 
@@ -142,8 +142,8 @@ class MyCanvas(wx.ScrolledCanvas):
         """ 
         OnSize event callback. Currently not used 
         """ 
-        print "Size " + str(self.GetSize()) 
-        print "VirtualSize " + str(self.GetVirtualSize())
+        print("Size " + str(self.GetSize())) 
+        print("VirtualSize " + str(self.GetVirtualSize()))
         size = self.GetSize()
         vsize = self.GetVirtualSize()
         if self.use_x and self.use_y:
@@ -179,7 +179,7 @@ class MyCanvas(wx.ScrolledCanvas):
             #PaintRectangle(rect, dc)
             r.append("rect: %s" % str(rect))
             upd.Next()
-        print s, (posX, posY), (vbX, vbY), " ".join(r)
+        print(s, (posX, posY), (vbX, vbY), " ".join(r))
         dc.SetLogicalOrigin(posX, posY)
 
         dc.SetFont(wx.NORMAL_FONT)
@@ -258,7 +258,7 @@ class MyCanvas(wx.ScrolledCanvas):
             dc.DrawRectangle(startX, startY, width, height) 
         
         data = (self,posX,posY,startX, startY, endX, endY) 
-        print 'Painting "%s" pos=%s,%s start=%s,%s end=%s,%s' % data 
+        print('Painting "%s" pos=%s,%s start=%s,%s end=%s,%s' % data) 
 
         
         sizeX = 20 #pixels 
@@ -274,7 +274,7 @@ class MyCanvas(wx.ScrolledCanvas):
         nbTick = int((endX - tick) / sizeX) + 1 
         listX = [] 
         dc.SetLogicalFunction(wx.AND) 
-        for i in xrange(0,nbTick): 
+        for i in range(0,nbTick): 
             x = tick + int(i * sizeX) 
             if i % 4 == 0: 
                 dc.SetPen(wx.MEDIUM_GREY_PEN) 
@@ -294,7 +294,7 @@ class MyCanvas(wx.ScrolledCanvas):
         nbTick = int((endY - tick) / sizeY) + 1 
         listY = [] 
         dc.SetLogicalFunction(wx.AND) 
-        for i in xrange(0,nbTick): 
+        for i in range(0,nbTick): 
             y = tick + int(i * sizeY) 
             if i % 4 == 0: 
                 dc.SetPen(wx.MEDIUM_GREY_PEN) 
@@ -314,12 +314,12 @@ class MyCanvas(wx.ScrolledCanvas):
         
       
     def OnClickEvent(self, event): 
-        print 
-        print "Title " + str(self)
-        print "Position " + str(self.GetPosition()) 
-        print "ViewStart " + str(self.GetViewStart()) 
-        print "Size " + str(self.GetSize()) 
-        print "VirtualSize " + str(self.GetVirtualSize()) 
+        print() 
+        print("Title " + str(self))
+        print("Position " + str(self.GetPosition())) 
+        print("ViewStart " + str(self.GetViewStart())) 
+        print("Size " + str(self.GetSize())) 
+        print("VirtualSize " + str(self.GetVirtualSize())) 
 
 
 class MyMainCanvas(MyCanvas): 
@@ -345,7 +345,7 @@ class MyMainCanvas(MyCanvas):
         dy = self.GetScrollPos(wx.VERTICAL) 
         self.topPanel.Scroll(- dx, 0) 
         self.leftPanel.Scroll(0, -dy) 
-        print "scrolling viewStart=%s,%s scrollPos=%s,%s" % (sx, sy, dx, dy) 
+        print("scrolling viewStart=%s,%s scrollPos=%s,%s" % (sx, sy, dx, dy)) 
 
 class MyApp(wx.App): 
     """ 
@@ -374,7 +374,7 @@ class MyApp(wx.App):
         # simple.SetVirtualSize(wx.Size(1000,1000)) 
         # simple.SetScrollRate(20,20) 
         # frame2.Show() 
-        print "wx.VERSION = " + wx.VERSION_STRING 
+        print("wx.VERSION = " + wx.VERSION_STRING) 
         return True 
         
 #For testing 

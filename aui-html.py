@@ -52,17 +52,17 @@ class AuiFrame(wx.Frame):
         
         # create default perspective
         all_panes = self._mgr.GetAllPanes()
-        for ii in xrange(len(all_panes)):
+        for ii in range(len(all_panes)):
             if not all_panes[ii].IsToolbar():
                 all_panes[ii].Hide()
         self._mgr.GetPane("Center").Show()
         perspective_default = self._mgr.SavePerspective()
-        print perspective_default
+        print(perspective_default)
         # If this is True the toolbar unexpectedly gets a gripper
         if True:            
             self._mgr.LoadPerspective(perspective_default)  
                     
-        print self._mgr.GetPane("iconbar").HasGripper()
+        print(self._mgr.GetPane("iconbar").HasGripper())
         self._mgr.Update()
 
 def main():

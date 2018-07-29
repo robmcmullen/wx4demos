@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+
 
 from pyface.about_dialog import AboutDialog
 from pyface.application_window import ApplicationWindow

@@ -90,7 +90,7 @@ class DockingRectangleHandler(object):
         pos = event.GetPosition()
 
         for rect in self.docking_rectangles:
-            print("checking %s in rect %s" % (pos, rect))
+            print(("checking %s in rect %s" % (pos, rect)))
             if rect.Contains(pos):
                 break
         else:
@@ -222,7 +222,7 @@ class TestPanel(wx.Panel):
         rect = self.GetClientRect()
         dc.DestroyClippingRegion()
         dc.SetClippingRegion(rect)
-        print("painting", rect, dc.GetClippingRect())
+        print(("painting", rect, dc.GetClippingRect()))
         dc.SetBrush(wx.WHITE_BRUSH)
         dc.SetPen(wx.WHITE_PEN)
         dc.DrawRectangle(rect)

@@ -23,10 +23,10 @@ class MainFrame(wx.Frame):
         if color is None:
             attr = self.parent.GetDefaultAttributes()
             color = wx.Colour(attr.colBg)
-        print("SOHEURCOESUHOEUH", color, type(color))
+        print(("SOHEURCOESUHOEUH", color, type(color)))
         ctrl.SetBackgroundColour(color)
         ctrl.SetValue(str(text))
-        print("Set text to: %s" % text)
+        print(("Set text to: %s" % text))
 
     def get_error_text(self, ctrl):
         if ctrl == self.ctrl2:

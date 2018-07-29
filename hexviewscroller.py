@@ -171,11 +171,11 @@ class HexGridWindow(wx.ScrolledWindow):
         return font
 
     def on_left_up(self, event):
-        print
-        print "Title " + str(self)
-        print "Position " + str(self.GetPosition())
-        print "Size " + str(self.GetSize())
-        print "VirtualSize " + str(self.GetVirtualSize())
+        print()
+        print("Title " + str(self))
+        print("Position " + str(self.GetPosition()))
+        print("Size " + str(self.GetSize()))
+        print("VirtualSize " + str(self.GetVirtualSize()))
         event.Skip()
        
     def set_pane_sizes(self, width, height):
@@ -318,7 +318,7 @@ class MyApp(wx.App):
         frame.Show()
         # self.SetTopWindow(frame)
        
-        print "wx.VERSION = " + wx.VERSION_STRING
+        print("wx.VERSION = " + wx.VERSION_STRING)
         return True
 
     def set_focus(self, evt):
@@ -326,14 +326,14 @@ class MyApp(wx.App):
         self.t1.SetFocus()
 
     def EvtText(self, event):
-        print('EvtText: %s' % event.GetString())
+        print(('EvtText: %s' % event.GetString()))
 
     def EvtTextEnter(self, event):
         print('EvtTextEnter')
         event.Skip()
 
     def EvtChar(self, event):
-        print('EvtChar: %d' % event.GetKeyCode())
+        print(('EvtChar: %d' % event.GetKeyCode()))
         event.Skip()
        
 #For testing
