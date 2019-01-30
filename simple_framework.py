@@ -100,7 +100,12 @@ class SimpleFrame(wx.Frame):
         self.raw_menubar = wx.MenuBar()
         self.SetMenuBar(self.raw_menubar)
         self.Bind(wx.EVT_MENU, self.on_menu)
-        self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open)
+        if wx.Platform == "__WXMAC__":
+            self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_mac)
+        elif wx.Platform == "__WXMSW__":
+            self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_win)
+        else:
+            self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_linux)            
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.notebook = wx.Notebook(self, -1)
@@ -140,14 +145,24 @@ class SimpleFrame(wx.Frame):
     def find_tab_number_of_editor(self, editor):
         return self.notebook.FindPage(editor.control)
 
-    def on_menu_open(self, evt):
+    def on_menu_open_win(self, evt):
+        # windows only works when updating the menu during the event call
+        print(f"on_menu_open_win: syncing menubar. From {evt.GetMenu()}")
+        self.sync_menubar()
+
+    def on_menu_open_linux(self, evt):
+        # workaround for linux which crashes updating the menu bar during an event
+        print(f"on_menu_open: syncing menubar. From {evt.GetMenu()}")
+        wx.CallAfter(self.sync_menubar)
+
+    def on_menu_open_mac(self, evt):
         # workaround for Mac which sends the EVT_MENU_OPEN for lots of stuff unrelated to menus
         state = wx.GetMouseState()
         if state.LeftIsDown():
-            print(f"on_menu_open: syncing menubar. From {evt.GetMenu()}")
+            print(f"on_menu_open_mac: syncing menubar. From {evt.GetMenu()}")
             wx.CallAfter(self.sync_menubar)
         else:
-            print(f"on_menu_open: skipping menubar sync because mouse isn't down. From {evt.GetMenu()}")
+            print(f"on_menu_open_mac: skipping menubar sync because mouse isn't down. From {evt.GetMenu()}")
 
     def on_menu(self, evt):
         action_id = evt.GetId()
