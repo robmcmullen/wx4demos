@@ -65,7 +65,7 @@ class MenuDescription:
                         for action_key in action_keys:
                             id = get_action_id(action_key)
                             valid_id_map[id] = (action_key, action)
-                            self.menu.Append(id, action.calc_name(action_key))
+                            action.append_to_menu(self.menu, id, action_key)
             else:
                 submenu = MenuDescription(action_key, editor, valid_id_map)
                 if submenu.count > 0:
@@ -173,11 +173,18 @@ class ActionBase:
         self.editor = editor
         self.init_from_editor()
 
+    def append_to_menu(self, menu, id, action_key):
+        menu.Append(id, self.calc_name(action_key))
+
     def init_from_editor(self):
         pass
 
     def sync_from_editor(self, action_key, menu_item):
         pass
+
+class ActionBaseRadioMixin:
+    def append_to_menu(self, menu, id, action_key):
+        menu.AppendRadioItem(id, self.calc_name(action_key))
 
 class new_file(ActionBase):
     def calc_name(self, action_key):
@@ -253,6 +260,19 @@ class text_counting(ActionBase):
         count = self.editor.control.GetLastPosition()
         menu_item.Enable(count >= self.count_map[action_key])
 
+class text_last_digit(ActionBaseRadioMixin, ActionBase):
+    def calc_name(self, action_key):
+        return action_key.replace("_", " ").title()
+
+    def calc_sub_keys(self, action_key):
+        self.count_map = {f"text_last_digit_{c}":c for c in range(10)}
+        return [f"text_last_digit_{c}" for c in range(10)]
+
+    def sync_from_editor(self, action_key, menu_item):
+        count = self.editor.control.GetLastPosition()
+        divisor = self.count_map[action_key]
+        menu_item.Check(count % 10 == divisor)
+
 class text_size(ActionBase):
     def init_from_editor(self):
         self.counts = list(range(5, 25, 5))
@@ -270,7 +290,7 @@ class Editor:
     menubar_desc = [
     ["File", "new_file", "open_file", None, "save", "save_as", None, "quit"],
     ["Edit", "copy", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
-    ["Text", "text_counting", None, "text_size"],
+    ["Text", "text_counting", None, "text_last_digit", None, "text_size"],
     ["Document", "document_list"],
     ["Help", "about"],
     ]
@@ -288,6 +308,7 @@ class Editor:
          "about": about,
          "document_list": document_list,
          "text_counting": text_counting,
+         "text_last_digit": text_last_digit,
          "text_size": text_size,
     }
 
@@ -325,6 +346,7 @@ if __name__ == "__main__":
          "prefs": prefs,
          "about": about,
          "text_counting": text_counting,
+         "text_last_digit": text_last_digit,
          "text_size": text_size,
     }
     editor2.tab_name = "Empty"
