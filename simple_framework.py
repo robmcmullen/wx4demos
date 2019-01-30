@@ -88,6 +88,7 @@ class MenubarDescription:
 
     def sync_with_editor(self, menubar_control):
         for id, (action_key, action) in self.valid_id_map.items():
+#            print(f"syncing {id}: {action_key}, {action}")
             menu_item = menubar_control.FindItemById(id)
             action.sync_from_editor(action_key, menu_item)
 
@@ -140,12 +141,17 @@ class SimpleFrame(wx.Frame):
         return self.notebook.FindPage(editor.control)
 
     def on_menu_open(self, evt):
-        print(f"syncing menubar")
-        wx.CallAfter(self.sync_menubar)
+        # workaround for Mac which sends the EVT_MENU_OPEN for lots of stuff unrelated to menus
+        state = wx.GetMouseState()
+        if state.LeftIsDown():
+            print(f"on_menu_open: syncing menubar. From {evt.GetMenu()}")
+            wx.CallAfter(self.sync_menubar)
+        else:
+            print(f"on_menu_open: skipping menubar sync because mouse isn't down. From {evt.GetMenu()}")
 
     def on_menu(self, evt):
         action_id = evt.GetId()
-        print(f"menu id: {action_id}")
+        print(f"on_menu: menu id: {action_id}")
         try:
             action = self.menubar.valid_id_map[action_id]
             try:
@@ -158,7 +164,7 @@ class SimpleFrame(wx.Frame):
             print(f"found action {action}")
 
     def on_page_changed(self, evt):
-        print(f"page changed id: {evt.GetSelection()}")
+        print(f"on_page_changed: page id: {evt.GetSelection()}")
         editor = self.editors[evt.GetSelection()]
         self.make_active(editor, True)
 
@@ -283,8 +289,6 @@ class text_last_digit_dyn(ActionBase):
         count = (self.editor.control.GetLastPosition() % 10) + 1
         if count != self.count:
             raise RecreateDynamicMenuBar
-        divisor = self.count_map[action_key]
-        menu_item.Check(count % 10 == divisor)
 
 class text_size(ActionBase):
     def init_from_editor(self):
