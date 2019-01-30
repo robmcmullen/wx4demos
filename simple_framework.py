@@ -6,19 +6,8 @@ import wx
 import numpy as np
 import numpy.random as rand
 
-class ImagePanel(wx.Panel):
-    """ 
-    A very simple panel for displaying a wx.Image
-    """
-    def __init__(self, image, *args, **kwargs):
-        wx.Panel.__init__(self, *args, **kwargs)
-        
-        self.image = image
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-    
-    def OnPaint(self, event):
-        dc = wx.PaintDC(self)
-        dc.DrawBitmap(wx.BitmapFromImage(self.image), 0, 0)
+class RecreateDynamicMenuBar(RuntimeError):
+    pass
 
 
 global_action_ids = {
@@ -55,11 +44,13 @@ class MenuDescription:
                     try:
                         action = editor.calc_usable_action(action_key)
                     except:
+                        print(f"action {action_key} not used in this editor")
                         pass
                     else:
                         # a single action can create multiple entries
                         try:
                             action_keys = action.calc_sub_keys(editor)
+                            print(f"action {action_key} created subkeys {action_keys}")
                         except AttributeError:
                             action_keys = [action_key]
                         for action_key in action_keys:
@@ -123,7 +114,11 @@ class SimpleFrame(wx.Frame):
         self.menubar = MenubarDescription(self, self.active_editor)
 
     def sync_menubar(self):
-        self.menubar.sync_with_editor(self.raw_menubar)
+        try:
+            self.menubar.sync_with_editor(self.raw_menubar)
+        except RecreateDynamicMenuBar:
+            self.create_menubar()
+            self.menubar.sync_with_editor(self.raw_menubar)
 
     def add_editor(self, editor):
         self.editors.append(editor)
@@ -146,7 +141,7 @@ class SimpleFrame(wx.Frame):
 
     def on_menu_open(self, evt):
         print(f"syncing menubar")
-        self.sync_menubar()
+        wx.CallAfter(self.sync_menubar)
 
     def on_menu(self, evt):
         action_id = evt.GetId()
@@ -273,6 +268,24 @@ class text_last_digit(ActionBaseRadioMixin, ActionBase):
         divisor = self.count_map[action_key]
         menu_item.Check(count % 10 == divisor)
 
+class text_last_digit_dyn(ActionBase):
+    def init_from_editor(self):
+        self.count = (self.editor.control.GetLastPosition() % 10) + 1
+
+    def calc_name(self, action_key):
+        return action_key.replace("_", " ").title()
+
+    def calc_sub_keys(self, action_key):
+        self.count_map = {f"text_last_digit_dyn{c}":c for c in range(self.count)}
+        return [f"text_last_digit_dyn{c}" for c in range(self.count)]
+
+    def sync_from_editor(self, action_key, menu_item):
+        count = (self.editor.control.GetLastPosition() % 10) + 1
+        if count != self.count:
+            raise RecreateDynamicMenuBar
+        divisor = self.count_map[action_key]
+        menu_item.Check(count % 10 == divisor)
+
 class text_size(ActionBase):
     def init_from_editor(self):
         self.counts = list(range(5, 25, 5))
@@ -291,6 +304,7 @@ class Editor:
     ["File", "new_file", "open_file", None, "save", "save_as", None, "quit"],
     ["Edit", "copy", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
     ["Text", "text_counting", None, "text_last_digit", None, "text_size"],
+    ["Dynamic", "text_last_digit_dyn"],
     ["Document", "document_list"],
     ["Help", "about"],
     ]
@@ -309,6 +323,7 @@ class Editor:
          "document_list": document_list,
          "text_counting": text_counting,
          "text_last_digit": text_last_digit,
+         "text_last_digit_dyn": text_last_digit_dyn,
          "text_size": text_size,
     }
 
@@ -347,6 +362,7 @@ if __name__ == "__main__":
          "about": about,
          "text_counting": text_counting,
          "text_last_digit": text_last_digit,
+         "text_last_digit_dyn": text_last_digit_dyn,
          "text_size": text_size,
     }
     editor2.tab_name = "Empty"
