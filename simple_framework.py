@@ -31,129 +31,184 @@ global_action_ids = {
 }
 
 
-def get_action_id(item):
+def get_action_id(action_key):
     global global_action_ids
 
     try:
-        id = global_action_ids[item]
+        id = global_action_ids[action_key]
     except KeyError:
         id = wx.NewId()
-        global_action_ids[item] = id
+        global_action_ids[action_key] = id
     return id
 
 
 class MenuDescription:
-    def __init__(self, desc, usable_actions, valid_id_map):
+    def __init__(self, desc, editor, valid_id_map):
         self.menu = wx.Menu()
         print(f"adding menu {desc}")
         self.name = desc[0]
-        for item in desc[1:]:
-            if item is None:
+        for action_key in desc[1:]:
+            if action_key is None:
                 self.menu.AppendSeparator()
-            elif str(item) == item:
-                if item.startswith("-"):
+            elif str(action_key) == action_key:
+                if action_key.startswith("-"):
                     self.menu.AppendSeparator()
                 else:
+                    # usable_actions limit the visible actions to what the current editor supports
                     try:
-                        action = usable_actions[item]
+                        action = editor.calc_usable_action(action_key)
                     except:
                         pass
                     else:
-                        id = get_action_id(item)
-                        valid_id_map[id] = action
-                        self.menu.Append(id, action.calc_name())
+                        # a single action can create multiple entries
+                        try:
+                            action_keys = action.calc_sub_keys(editor)
+                        except AttributeError:
+                            action_keys = [action_key]
+                        for action_key in action_keys:
+                            id = get_action_id(action_key)
+                            valid_id_map[id] = action
+                            self.menu.Append(id, action.calc_name(action_key))
             else:
-                submenu = MenuDescription(item, usable_actions, valid_id_map)
-                self.menu.AppendSubMenu(submenu.menu, submenu.name)
+                submenu = MenuDescription(action_key, editor, valid_id_map)
+                if submenu.count > 0:
+                    self.menu.AppendSubMenu(submenu.menu, submenu.name)
+
+    @property
+    def count(self):
+        return self.menu.GetMenuItemCount()
 
 
 class MenubarDescription:
     def __init__(self, parent, editor):
         self.menus = []
         self.valid_id_map = {}
+        num_old_menus = parent.raw_menubar.GetMenuCount()
+        num_new_menus = 0
         for desc in editor.menubar_desc:
-            menu = MenuDescription(desc, editor.usable_actions, self.valid_id_map)
-            parent.raw_menubar.Append(menu.menu, menu.name)
-            self.menus.append(menu)
+            menu = MenuDescription(desc, editor, self.valid_id_map)
+            if menu.count > 0:
+                if num_new_menus < num_old_menus:
+                    parent.raw_menubar.Replace(num_new_menus, menu.menu, menu.name)
+                else:
+                    parent.raw_menubar.Append(menu.menu, menu.name)
+                self.menus.append(menu)
+                num_new_menus += 1
+        while num_new_menus < num_old_menus:
+            parent.raw_menubar.Remove(num_new_menus)
+            num_old_menus -= 1
 
 
 class SimpleFrame(wx.Frame):
     def __init__(self, editor):
         wx.Frame.__init__(self, None , -1, editor.title)
-        self.editors = [editor]
-        self.active_editor = editor
+        self.editors = []
         self.raw_menubar = wx.MenuBar()
-        self.create_menubar()
         self.SetMenuBar(self.raw_menubar)
         self.Bind(wx.EVT_MENU, self.on_menu)
 
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.notebook = wx.Notebook(self, -1)
+        sizer.Add(self.notebook, 1, wx.GROW)
+        self.SetSizer(sizer)
+
+        self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_page_changed)
+
+        self.add_editor(editor)
+
     def create_menubar(self):
         self.menubar = MenubarDescription(self, self.active_editor)
+
+    def add_editor(self, editor):
+        self.editors.append(editor)
+        editor.attached_to_frame = self
+        control = editor.create_control(self.notebook)
+        editor.control = control
+        self.notebook.AddPage(control, editor.tab_name)
+        self.make_active(editor)
+
+    def make_active(self, editor, force=False):
+        self.active_editor = editor
+        i = self.find_tab_number_of_editor(editor)
+        if force or i != self.notebook.GetSelection() or self.raw_menubar.GetMenuCount() == 0:
+            self.create_menubar()
+            self.notebook.ChangeSelection(i)
+
+    def find_tab_number_of_editor(self, editor):
+        return self.notebook.FindPage(editor.control)
 
     def on_menu(self, evt):
         action_id = evt.GetId()
         print(f"menu id: {action_id}")
         try:
             action = self.menubar.valid_id_map[action_id]
+            try:
+                action.execute(self.active_editor)
+            except AttributeError:
+                print(f"no execute method for {action}")
         except:
             print(f"menu id: {action_id} not found!")
         else:
             print(f"found action {action}")
 
+    def on_page_changed(self, evt):
+        print(f"page changed id: {evt.GetSelection()}")
+        editor = self.editors[evt.GetSelection()]
+        self.make_active(editor, True)
 
 
-class new_file:
-    @classmethod
-    def calc_name(cls):
+class ActionBase:
+    def __init__(self, editor):
+        self.editor = editor
+
+class new_file(ActionBase):
+    def calc_name(self, action_key):
         return "&New"
 
-
-class open_file:
-    @classmethod
-    def calc_name(cls):
+class open_file(ActionBase):
+    def calc_name(self, action_key):
         return "&Open"
 
-
-class application_quit:
-    @classmethod
-    def calc_name(cls):
+class application_quit(ActionBase):
+    def calc_name(self, action_key):
         return "&Quit"
 
+    def execute(self):
+        self.editor.attached_to_frame.Destroy()
 
-class copy:
-    @classmethod
-    def calc_name(cls):
+class copy(ActionBase):
+    def calc_name(self, action_key):
         return "&Copy"
 
-
-class paste:
-    @classmethod
-    def calc_name(cls):
+class paste(ActionBase):
+    def calc_name(self, action_key):
         return "&Paste"
 
-
-class paste_as_text:
-    @classmethod
-    def calc_name(cls):
+class paste_as_text(ActionBase):
+    def calc_name(self, action_key):
         return "Paste As Text"
 
-
-class prefs:
-    @classmethod
-    def calc_name(cls):
+class prefs(ActionBase):
+    def calc_name(self, action_key):
         return "&Preferences"
 
-
-class about:
-    @classmethod
-    def calc_name(cls):
+class about(ActionBase):
+    def calc_name(self, action_key):
         return "&About"
+
+class document_list(ActionBase):
+    def calc_name(self, action_key):
+        return action_key.replace("_", " ").title()
+
+    def calc_sub_keys(cls, action_key):
+        return ["document_list1", "document_list2", "document_list3"]
 
 
 class Editor:
     menubar_desc = [
     ["File", "new_file", "open_file", None, "quit"],
     ["Edit", "copy", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
+    ["Document", "document_list"],
     ["Help", "about"],
     ]
 
@@ -166,10 +221,20 @@ class Editor:
          "paste_as_text": paste_as_text,
          "prefs": prefs,
          "about": about,
+         "document_list": document_list,
     }
 
     def __init__(self):
         self.title = "Sample Editor"
+        self.tab_name = "Text"
+        self.attached_to_frame = None
+
+    def create_control(self, parent):
+        return wx.TextCtrl(parent, -1, style=wx.TE_MULTILINE)
+
+    def calc_usable_action(self, action_key):
+        action_factory = self.usable_actions[action_key]
+        return action_factory(self)
 
 
 class DemoFrame(SimpleFrame):
@@ -177,69 +242,22 @@ class DemoFrame(SimpleFrame):
     def __init__(self, editor):
         SimpleFrame.__init__(self, editor)
 
-        btn = wx.Button(self, label = "NewImage")
-        btn.Bind(wx.EVT_BUTTON, self.OnNewImage )
-
-        self.Bind(wx.EVT_CLOSE, self.OnQuit)
-
-        ##Create numpy array, and image from it
-        w = h = 200
-        self.array = rand.randint(0, 255, (h, w, 3)).astype('uint8')
-        self.array = np.zeros((h, w, 3), dtype='uint8')
-        self.array[:,:,0] = 128
-        print(self.array.shape)
-        image = wx.ImageFromBuffer(w, h, self.array)
-        #image = wx.Image("Images/cute_close_up.jpg")
-        self.Panel = ImagePanel(image, self)
-        
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(btn, 0, wx.ALIGN_CENTER|wx.ALL, 5)
-        sizer.Add(self.Panel, 1, wx.GROW)
-        
-        self.SetSizer(sizer)
-
-    def OnNewImage(self, event=None):
-        """
-        create a new image by changing underlying numpy array
-        """
-        self.array += 5
-        self.Panel.Refresh()
-        
-        
-    def OnQuit(self,Event):
-        self.Destroy()
-        
-    def OnAbout(self, event):
-        dlg = wx.MessageDialog(self, "This is a small program to test\n"
-                                     "the use of menus on Mac, etc.\n",
-                                "About Me", wx.OK | wx.ICON_INFORMATION)
-        dlg.ShowModal()
-        dlg.Destroy()
-
-    def OnHelp(self, event):
-        dlg = wx.MessageDialog(self, "This would be help\n"
-                                     "If there was any\n",
-                                "Test Help", wx.OK | wx.ICON_INFORMATION)
-        dlg.ShowModal()
-        dlg.Destroy()
-
-    def OnOpen(self, event):
-        dlg = wx.MessageDialog(self, "This would be an open Dialog\n"
-                                     "If there was anything to open\n",
-                                "Open File", wx.OK | wx.ICON_INFORMATION)
-        dlg.ShowModal()
-        dlg.Destroy()
-
-    def OnPrefs(self, event):
-        dlg = wx.MessageDialog(self, "This would be an preferences Dialog\n"
-                                     "If there were any preferences to set.\n",
-                                "Preferences", wx.OK | wx.ICON_INFORMATION)
-        dlg.ShowModal()
-        dlg.Destroy()
 
 if __name__ == "__main__":
     app = wx.App(False)
     editor = Editor()
+    editor2 = Editor()
+    editor2.usable_actions = {
+         "new_file": new_file,
+         "open_file": open_file,
+         "quit": application_quit,
+         "copy": copy,
+         "paste": paste,
+         "prefs": prefs,
+         "about": about,
+    }
+    editor2.tab_name = "Empty"
     frame = DemoFrame(editor)
+    frame.add_editor(editor2)
     frame.Show()
     app.MainLoop()
