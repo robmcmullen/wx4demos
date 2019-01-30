@@ -1,9 +1,6 @@
-#!/usr/bin/env python2.5
-
+""" Simple menubar & tabbed window framework
 """
-a small test of initializing a wxImage from a numpy array
-"""
-
+import collections
 
 import wx
 import numpy as np
@@ -67,7 +64,7 @@ class MenuDescription:
                             action_keys = [action_key]
                         for action_key in action_keys:
                             id = get_action_id(action_key)
-                            valid_id_map[id] = action
+                            valid_id_map[id] = (action_key, action)
                             self.menu.Append(id, action.calc_name(action_key))
             else:
                 submenu = MenuDescription(action_key, editor, valid_id_map)
@@ -82,7 +79,7 @@ class MenuDescription:
 class MenubarDescription:
     def __init__(self, parent, editor):
         self.menus = []
-        self.valid_id_map = {}
+        self.valid_id_map = collections.OrderedDict()
         num_old_menus = parent.raw_menubar.GetMenuCount()
         num_new_menus = 0
         for desc in editor.menubar_desc:
@@ -98,6 +95,11 @@ class MenubarDescription:
             parent.raw_menubar.Remove(num_new_menus)
             num_old_menus -= 1
 
+    def sync_with_editor(self, menubar_control):
+        for id, (action_key, action) in self.valid_id_map.items():
+            menu_item = menubar_control.FindItemById(id)
+            action.sync_from_editor(action_key, menu_item)
+
 
 class SimpleFrame(wx.Frame):
     def __init__(self, editor):
@@ -106,6 +108,7 @@ class SimpleFrame(wx.Frame):
         self.raw_menubar = wx.MenuBar()
         self.SetMenuBar(self.raw_menubar)
         self.Bind(wx.EVT_MENU, self.on_menu)
+        self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.notebook = wx.Notebook(self, -1)
@@ -118,6 +121,9 @@ class SimpleFrame(wx.Frame):
 
     def create_menubar(self):
         self.menubar = MenubarDescription(self, self.active_editor)
+
+    def sync_menubar(self):
+        self.menubar.sync_with_editor(self.raw_menubar)
 
     def add_editor(self, editor):
         self.editors.append(editor)
@@ -132,10 +138,15 @@ class SimpleFrame(wx.Frame):
         i = self.find_tab_number_of_editor(editor)
         if force or i != self.notebook.GetSelection() or self.raw_menubar.GetMenuCount() == 0:
             self.create_menubar()
+            self.sync_menubar()
             self.notebook.ChangeSelection(i)
 
     def find_tab_number_of_editor(self, editor):
         return self.notebook.FindPage(editor.control)
+
+    def on_menu_open(self, evt):
+        print(f"syncing menubar")
+        self.sync_menubar()
 
     def on_menu(self, evt):
         action_id = evt.GetId()
@@ -160,6 +171,13 @@ class SimpleFrame(wx.Frame):
 class ActionBase:
     def __init__(self, editor):
         self.editor = editor
+        self.init_from_editor()
+
+    def init_from_editor(self):
+        pass
+
+    def sync_from_editor(self, action_key, menu_item):
+        pass
 
 class new_file(ActionBase):
     def calc_name(self, action_key):
@@ -168,6 +186,17 @@ class new_file(ActionBase):
 class open_file(ActionBase):
     def calc_name(self, action_key):
         return "&Open"
+
+class save(ActionBase):
+    def calc_name(self, action_key):
+        return "&Save"
+
+    def sync_from_editor(self, action_key, menu_item):
+        menu_item.Enable(not self.editor.control.IsEmpty())
+
+class save_as(ActionBase):
+    def calc_name(self, action_key):
+        return "Save &As"
 
 class application_quit(ActionBase):
     def calc_name(self, action_key):
@@ -180,9 +209,15 @@ class copy(ActionBase):
     def calc_name(self, action_key):
         return "&Copy"
 
+    def sync_from_editor(self, action_key, menu_item):
+        menu_item.Enable(self.editor.control.CanCopy())
+
 class paste(ActionBase):
     def calc_name(self, action_key):
         return "&Paste"
+
+    def sync_from_editor(self, action_key, menu_item):
+        menu_item.Enable(self.editor.control.CanPaste())
 
 class paste_as_text(ActionBase):
     def calc_name(self, action_key):
@@ -200,14 +235,42 @@ class document_list(ActionBase):
     def calc_name(self, action_key):
         return action_key.replace("_", " ").title()
 
-    def calc_sub_keys(cls, action_key):
+    def calc_sub_keys(self, action_key):
         return ["document_list1", "document_list2", "document_list3"]
+
+class text_counting(ActionBase):
+    def init_from_editor(self):
+        self.counts = list(range(5, 25, 5))
+
+    def calc_name(self, action_key):
+        return action_key.replace("_", " ").title()
+
+    def calc_sub_keys(self, action_key):
+        self.count_map = {f"text_count_{c}":c for c in self.counts}
+        return [f"text_count_{c}" for c in self.counts]
+
+    def sync_from_editor(self, action_key, menu_item):
+        count = self.editor.control.GetLastPosition()
+        menu_item.Enable(count >= self.count_map[action_key])
+
+class text_size(ActionBase):
+    def init_from_editor(self):
+        self.counts = list(range(5, 25, 5))
+
+    def calc_name(self, action_key):
+        size = self.editor.control.GetLastPosition()
+        return f"Text Size: {size}"
+
+    def sync_from_editor(self, action_key, menu_item):
+        name = self.calc_name(action_key)
+        menu_item.SetItemLabel(name)
 
 
 class Editor:
     menubar_desc = [
-    ["File", "new_file", "open_file", None, "quit"],
+    ["File", "new_file", "open_file", None, "save", "save_as", None, "quit"],
     ["Edit", "copy", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
+    ["Text", "text_counting", None, "text_size"],
     ["Document", "document_list"],
     ["Help", "about"],
     ]
@@ -215,6 +278,8 @@ class Editor:
     usable_actions = {
          "new_file": new_file,
          "open_file": open_file,
+         "save": save,
+         "save_as": save_as,
          "quit": application_quit,
          "copy": copy,
          "paste": paste,
@@ -222,6 +287,8 @@ class Editor:
          "prefs": prefs,
          "about": about,
          "document_list": document_list,
+         "text_counting": text_counting,
+         "text_size": text_size,
     }
 
     def __init__(self):
@@ -250,11 +317,15 @@ if __name__ == "__main__":
     editor2.usable_actions = {
          "new_file": new_file,
          "open_file": open_file,
+         "save": save,
+         "save_as": save_as,
          "quit": application_quit,
          "copy": copy,
          "paste": paste,
          "prefs": prefs,
          "about": about,
+         "text_counting": text_counting,
+         "text_size": text_size,
     }
     editor2.tab_name = "Empty"
     frame = DemoFrame(editor)
