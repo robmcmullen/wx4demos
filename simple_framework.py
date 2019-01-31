@@ -3,10 +3,18 @@
 import collections
 
 import wx
+import wx.aui as aui
+# import wx.lib.agw.aui as aui
 import numpy as np
 import numpy.random as rand
 
-class RecreateDynamicMenuBar(RuntimeError):
+class SimpleFrameworkError(RuntimeError):
+    pass
+
+class RecreateDynamicMenuBar(SimpleFrameworkError):
+    pass
+
+class EditorNotFound(SimpleFrameworkError):
     pass
 
 
@@ -96,7 +104,6 @@ class MenubarDescription:
 class SimpleFrame(wx.Frame):
     def __init__(self, editor):
         wx.Frame.__init__(self, None , -1, editor.title)
-        self.editors = []
         self.raw_menubar = wx.MenuBar()
         self.SetMenuBar(self.raw_menubar)
         self.Bind(wx.EVT_MENU, self.on_menu)
@@ -105,18 +112,20 @@ class SimpleFrame(wx.Frame):
         elif wx.Platform == "__WXMSW__":
             self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_win)
         else:
-            self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_linux)            
+            self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_linux)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        self.notebook = wx.Notebook(self, -1)
+        self.notebook = aui.AuiNotebook(self, -1)
         sizer.Add(self.notebook, 1, wx.GROW)
         self.SetSizer(sizer)
 
-        self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_page_changed)
+        self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CHANGED, self.on_page_changed)
 
+        self.active_editor = None
         self.add_editor(editor)
 
     def create_menubar(self):
+        print(f"create_menubar: active editor={self.active_editor}")
         self.menubar = MenubarDescription(self, self.active_editor)
 
     def sync_menubar(self):
@@ -127,23 +136,38 @@ class SimpleFrame(wx.Frame):
             self.menubar.sync_with_editor(self.raw_menubar)
 
     def add_editor(self, editor):
-        self.editors.append(editor)
         editor.attached_to_frame = self
         control = editor.create_control(self.notebook)
         editor.control = control
+        control.editor = editor
         self.notebook.AddPage(control, editor.tab_name)
         self.make_active(editor)
 
     def make_active(self, editor, force=False):
+        last = self.active_editor
         self.active_editor = editor
-        i = self.find_tab_number_of_editor(editor)
-        if force or i != self.notebook.GetSelection() or self.raw_menubar.GetMenuCount() == 0:
+        if force or last != editor or self.raw_menubar.GetMenuCount() == 0:
             self.create_menubar()
             self.sync_menubar()
-            self.notebook.ChangeSelection(i)
+            index = self.find_index_from_control(editor.control)
+            print(f"setting tab focus to {index}")
+            self.notebook.SetSelection(index)
+            editor.control.SetFocus()
 
     def find_tab_number_of_editor(self, editor):
         return self.notebook.FindPage(editor.control)
+
+    def find_editor_from_control(self, control):
+        for index in range(self.notebook.GetPageCount()):
+            if control == self.notebook.GetPage(index):
+                return control.editor
+        raise EditorNotFound
+
+    def find_index_from_control(self, control):
+        for index in range(self.notebook.GetPageCount()):
+            if control == self.notebook.GetPage(index):
+                return index
+        raise EditorNotFound
 
     def on_menu_open_win(self, evt):
         # windows only works when updating the menu during the event call
@@ -180,7 +204,8 @@ class SimpleFrame(wx.Frame):
 
     def on_page_changed(self, evt):
         print(f"on_page_changed: page id: {evt.GetSelection()}")
-        editor = self.editors[evt.GetSelection()]
+        control = self.notebook.GetPage(evt.GetSelection())
+        editor = self.find_editor_from_control(control)
         self.make_active(editor, True)
 
 
