@@ -192,9 +192,9 @@ class SimpleFrame(wx.Frame):
         action_id = evt.GetId()
         print(f"on_menu: menu id: {action_id}")
         try:
-            action = self.menubar.valid_id_map[action_id]
+            action_key, action = self.menubar.valid_id_map[action_id]
             try:
-                action.execute(self.active_editor)
+                action.execute()
             except AttributeError:
                 print(f"no execute method for {action}")
         except:
