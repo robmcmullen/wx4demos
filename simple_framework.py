@@ -1,6 +1,7 @@
 """ Simple menubar & tabbed window framework
 """
 import collections
+import time
 
 import wx
 import wx.aui as aui
@@ -57,7 +58,7 @@ class MenuDescription:
                     else:
                         # a single action can create multiple entries
                         try:
-                            action_keys = action.calc_sub_keys(editor)
+                            action_keys = action.calc_menu_sub_keys(editor)
                             print(f"action {action_key} created subkeys {action_keys}")
                         except AttributeError:
                             action_keys = [action_key]
@@ -98,15 +99,60 @@ class MenubarDescription:
         for id, (action_key, action) in self.valid_id_map.items():
 #            print(f"syncing {id}: {action_key}, {action}")
             menu_item = menubar_control.FindItemById(id)
-            action.sync_from_editor(action_key, menu_item)
+            action.sync_menu_item_from_editor(action_key, menu_item)
+
+
+class ToolbarDescription:
+    def __init__(self, parent, editor):
+        tb = parent.raw_toolbar
+        tb.ClearTools()
+        self.valid_id_map = collections.OrderedDict()
+        for action_key in editor.toolbar_desc:
+            if action_key is None:
+                tb.AddSeparator()
+            else:
+                if action_key.startswith("-"):
+                    tb.AddSeparator()
+                else:
+                    # usable_actions limit the visible actions to what the current editor supports
+                    try:
+                        action = editor.calc_usable_action(action_key)
+                    except:
+                        print(f"action {action_key} not used in this editor")
+                        pass
+                    else:
+                        # a single action can create multiple entries
+                        try:
+                            action_keys = action.calc_tool_sub_keys(editor)
+                            print(f"action {action_key} created subkeys {action_keys}")
+                        except AttributeError:
+                            action_keys = [action_key]
+                        for action_key in action_keys:
+                            id = get_action_id(action_key)
+                            self.valid_id_map[id] = (action_key, action)
+                            action.append_to_toolbar(tb, id, action_key)
+
+    def sync_with_editor(self, toolbar_control):
+        for id, (action_key, action) in self.valid_id_map.items():
+            print(f"syncing tool {id}: {action_key}, {action}")
+            item = toolbar_control.FindById(id)
+            action.sync_tool_item_from_editor(action_key, toolbar_control, id)
 
 
 class SimpleFrame(wx.Frame):
+    last_clipboard_check_time = 0.0
+    clipboard_check_interval = 1.0
+
     def __init__(self, editor):
         wx.Frame.__init__(self, None , -1, editor.title)
+
         self.raw_menubar = wx.MenuBar()
         self.SetMenuBar(self.raw_menubar)
         self.Bind(wx.EVT_MENU, self.on_menu)
+
+        self.raw_toolbar = self.CreateToolBar(wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_FLAT)
+        self.Bind(wx.EVT_IDLE, self.on_idle)
+
         if wx.Platform == "__WXMAC__":
             self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_mac)
         elif wx.Platform == "__WXMSW__":
@@ -136,6 +182,17 @@ class SimpleFrame(wx.Frame):
             self.create_menubar()
             self.menubar.sync_with_editor(self.raw_menubar)
 
+    def create_toolbar(self):
+        print(f"create_toolbar: active editor={self.active_editor}")
+        self.toolbar = ToolbarDescription(self, self.active_editor)
+
+    def sync_toolbar(self):
+        try:
+            self.toolbar.sync_with_editor(self.raw_toolbar)
+        except RecreateDynamicMenuBar:
+            self.create_toolbar()
+            self.toolbar.sync_with_editor(self.raw_toolbar)
+
     def add_editor(self, editor):
         editor.attached_to_frame = self
         control = editor.create_control(self.notebook)
@@ -150,6 +207,8 @@ class SimpleFrame(wx.Frame):
         if force or last != editor or self.raw_menubar.GetMenuCount() == 0:
             self.create_menubar()
             self.sync_menubar()
+            self.create_toolbar()
+            self.sync_toolbar()
             index = self.find_index_from_control(editor.control)
             print(f"setting tab focus to {index}")
             self.notebook.SetSelection(index)
@@ -224,6 +283,16 @@ class SimpleFrame(wx.Frame):
         del control
         evt.Skip()
 
+    def on_idle(self, evt):
+        evt.Skip()
+        if not self.IsActive():
+            return
+        editor = self.active_editor
+        t = time.time()
+        if t > self.last_clipboard_check_time + self.clipboard_check_interval:
+            wx.CallAfter(self.sync_toolbar)
+            self.last_clipboard_check_time = time.time()
+            # FIXME: doesn't refresh toolbar until something moves...
 
 class ActionBase:
     def __init__(self, editor):
@@ -233,15 +302,29 @@ class ActionBase:
     def append_to_menu(self, menu, id, action_key):
         menu.Append(id, self.calc_name(action_key))
 
+    def append_to_toolbar(self, tb, id, action_key):
+        name = self.calc_name(action_key)
+        tb.AddTool(id, name, self.calc_bitmap(action_key), wx.NullBitmap, wx.ITEM_NORMAL, name, f"Long help for '{name}'", None)
+
+    def calc_bitmap(self, action_key):
+        return wx.ArtProvider.GetBitmap(wx.ART_FILE_OPEN, wx.ART_OTHER, self.editor.tool_bitmap_size)
+
     def init_from_editor(self):
         pass
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
+        pass
+
+    def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
         pass
 
 class ActionBaseRadioMixin:
     def append_to_menu(self, menu, id, action_key):
         menu.AppendRadioItem(id, self.calc_name(action_key))
+
+    def append_to_toolbar(self, tb, id, action_key):
+        name = self.calc_name(action_key)
+        tb.AddTool(id, name, self.calc_bitmap(action_key), wx.NullBitmap, wx.ITEM_RADIO, name, f"Long help for '{name}'", None)
 
 class new_file(ActionBase):
     def calc_name(self, action_key):
@@ -259,7 +342,7 @@ class save(ActionBase):
     def calc_name(self, action_key):
         return "&Save"
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
         menu_item.Enable(not self.editor.control.IsEmpty())
 
 class save_as(ActionBase):
@@ -277,14 +360,19 @@ class copy(ActionBase):
     def calc_name(self, action_key):
         return "&Copy"
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
         menu_item.Enable(self.editor.control.CanCopy())
+
+    def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
+        state = self.editor.control.CanCopy()
+        print(f"tool item {id}, {state}, {self.editor.tab_name}")
+        toolbar_control.EnableTool(id, state)
 
 class paste(ActionBase):
     def calc_name(self, action_key):
         return "&Paste"
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
         menu_item.Enable(self.editor.control.CanPaste())
 
 class paste_as_text(ActionBase):
@@ -303,7 +391,7 @@ class document_list(ActionBase):
     def calc_name(self, action_key):
         return action_key.replace("_", " ").title()
 
-    def calc_sub_keys(self, action_key):
+    def calc_menu_sub_keys(self, action_key):
         return ["document_list1", "document_list2", "document_list3"]
 
 class text_counting(ActionBase):
@@ -313,11 +401,11 @@ class text_counting(ActionBase):
     def calc_name(self, action_key):
         return action_key.replace("_", " ").title()
 
-    def calc_sub_keys(self, action_key):
+    def calc_menu_sub_keys(self, action_key):
         self.count_map = {f"text_count_{c}":c for c in self.counts}
         return [f"text_count_{c}" for c in self.counts]
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
         count = self.editor.control.GetLastPosition()
         menu_item.Enable(count >= self.count_map[action_key])
 
@@ -325,14 +413,21 @@ class text_last_digit(ActionBaseRadioMixin, ActionBase):
     def calc_name(self, action_key):
         return action_key.replace("_", " ").title()
 
-    def calc_sub_keys(self, action_key):
+    def calc_menu_sub_keys(self, action_key):
         self.count_map = {f"text_last_digit_{c}":c for c in range(10)}
         return [f"text_last_digit_{c}" for c in range(10)]
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
         count = self.editor.control.GetLastPosition()
         divisor = self.count_map[action_key]
         menu_item.Check(count % 10 == divisor)
+
+    calc_tool_sub_keys = calc_menu_sub_keys
+
+    def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
+        count = self.editor.control.GetLastPosition()
+        divisor = self.count_map[action_key]
+        toolbar_control.ToggleTool(id, count % 10 == divisor)
 
 class text_last_digit_dyn(ActionBase):
     def init_from_editor(self):
@@ -341,11 +436,11 @@ class text_last_digit_dyn(ActionBase):
     def calc_name(self, action_key):
         return action_key.replace("_", " ").title()
 
-    def calc_sub_keys(self, action_key):
+    def calc_menu_sub_keys(self, action_key):
         self.count_map = {f"text_last_digit_dyn{c}":c for c in range(self.count)}
         return [f"text_last_digit_dyn{c}" for c in range(self.count)]
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
         count = (self.editor.control.GetLastPosition() % 10) + 1
         if count != self.count:
             raise RecreateDynamicMenuBar
@@ -358,7 +453,7 @@ class text_size(ActionBase):
         size = self.editor.control.GetLastPosition()
         return f"Text Size: {size}"
 
-    def sync_from_editor(self, action_key, menu_item):
+    def sync_menu_item_from_editor(self, action_key, menu_item):
         name = self.calc_name(action_key)
         menu_item.SetItemLabel(name)
 
@@ -371,6 +466,10 @@ class Editor:
     ["Dynamic", "text_last_digit_dyn"],
     ["Document", "document_list"],
     ["Help", "about"],
+    ]
+
+    toolbar_desc = [
+    "new_file", "open_file", "save", None, "copy", "paste", "paste_as_text", "paste_as_hex",
     ]
 
     usable_actions = {
@@ -390,6 +489,8 @@ class Editor:
          "text_last_digit_dyn": text_last_digit_dyn,
          "text_size": text_size,
     }
+
+    tool_bitmap_size = (24, 24)
 
     def __init__(self):
         self.title = "Sample Editor"
@@ -434,6 +535,9 @@ if __name__ == "__main__":
          "text_last_digit_dyn": text_last_digit_dyn,
          "text_size": text_size,
     }
+    editor2.toolbar_desc = [
+    "new_file", "open_file", "save", None, "text_last_digit",
+    ]
     editor2.tab_name = "Editor 2"
     editor3 = Editor()
     editor3.tab_name = "Editor 3"
