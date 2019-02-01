@@ -120,6 +120,7 @@ class SimpleFrame(wx.Frame):
         self.SetSizer(sizer)
 
         self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CHANGED, self.on_page_changed)
+        self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSED, self.on_page_closed)
 
         self.active_editor = None
         self.add_editor(editor)
@@ -169,6 +170,10 @@ class SimpleFrame(wx.Frame):
                 return index
         raise EditorNotFound
 
+    def find_editor_from_index(self, index):
+        control = self.notebook.GetPage(index)
+        return self.find_editor_from_control(control)
+
     def on_menu_open_win(self, evt):
         # windows only works when updating the menu during the event call
         print(f"on_menu_open_win: syncing menubar. From {evt.GetMenu()}")
@@ -203,10 +208,21 @@ class SimpleFrame(wx.Frame):
             print(f"found action {action}")
 
     def on_page_changed(self, evt):
-        print(f"on_page_changed: page id: {evt.GetSelection()}")
-        control = self.notebook.GetPage(evt.GetSelection())
-        editor = self.find_editor_from_control(control)
+        index = evt.GetSelection()
+        editor = self.find_editor_from_index(index)
+        print(f"on_page_changed: page id: {index}, {editor}")
         self.make_active(editor, True)
+        evt.Skip()
+
+    def on_page_closed(self, evt):
+        index = evt.GetSelection()
+        print(f"on_page_closed: page id: {index}")
+        editor = self.find_editor_from_index(index)
+        control = editor.control
+        editor.prepare_destroy()
+        self.notebook.RemovePage(index)
+        del control
+        evt.Skip()
 
 
 class ActionBase:
@@ -230,6 +246,10 @@ class ActionBaseRadioMixin:
 class new_file(ActionBase):
     def calc_name(self, action_key):
         return "&New"
+
+    def execute(self):
+        new_editor = Editor()
+        wx.CallAfter(self.editor.attached_to_frame.add_editor, new_editor)
 
 class open_file(ActionBase):
     def calc_name(self, action_key):
@@ -345,7 +365,7 @@ class text_size(ActionBase):
 
 class Editor:
     menubar_desc = [
-    ["File", "new_file", "open_file", None, "save", "save_as", None, "quit"],
+    ["File", ["New", "new_file"], "open_file", None, "save", "save_as", None, "quit"],
     ["Edit", "copy", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
     ["Text", "text_counting", None, "text_last_digit", None, "text_size"],
     ["Dynamic", "text_last_digit_dyn"],
@@ -374,6 +394,11 @@ class Editor:
     def __init__(self):
         self.title = "Sample Editor"
         self.tab_name = "Text"
+        self.attached_to_frame = None
+
+    def prepare_destroy(self):
+        print(f"prepare_destroy: {self.tab_name}")
+        self.control = None
         self.attached_to_frame = None
 
     def create_control(self, parent):
@@ -409,8 +434,17 @@ if __name__ == "__main__":
          "text_last_digit_dyn": text_last_digit_dyn,
          "text_size": text_size,
     }
-    editor2.tab_name = "Empty"
+    editor2.tab_name = "Editor 2"
+    editor3 = Editor()
+    editor3.tab_name = "Editor 3"
+    editor4 = Editor()
+    editor4.tab_name = "Editor 4"
+    editor5 = Editor()
+    editor5.tab_name = "Editor 5"
     frame = DemoFrame(editor)
     frame.add_editor(editor2)
+    frame.add_editor(editor3)
+    frame.add_editor(editor4)
+    frame.add_editor(editor5)
     frame.Show()
     app.MainLoop()
