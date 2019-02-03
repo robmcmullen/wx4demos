@@ -4,10 +4,15 @@ import collections
 import time
 
 import wx
+import wx.adv
 import wx.aui as aui
 # import wx.lib.agw.aui as aui
 import numpy as np
 import numpy.random as rand
+
+import logging
+log = logging.getLogger(__name__)
+
 
 class SimpleFrameworkError(RuntimeError):
     pass
@@ -140,10 +145,8 @@ class ToolbarDescription:
 
 
 class SimpleFrame(wx.Frame):
-    clipboard_check_interval = 1.0
-
     def __init__(self, editor):
-        wx.Frame.__init__(self, None , -1, editor.title)
+        wx.Frame.__init__(self, None , -1, editor.title, size=wx.GetApp().last_window_size)
 
         self.raw_menubar = wx.MenuBar()
         self.SetMenuBar(self.raw_menubar)
@@ -293,7 +296,7 @@ class SimpleFrame(wx.Frame):
     def on_activate(self, evt):
         if evt.GetActive():
             print("restarting toolbar timer")
-            self.toolbar_timer.Start(self.clipboard_check_interval * 1000)
+            self.toolbar_timer.Start(wx.GetApp().clipboard_check_interval * 1000)
         else:
             print("halting toolbar timer")
             self.toolbar_timer.Stop()
@@ -392,6 +395,9 @@ class about(ActionBase):
     def calc_name(self, action_key):
         return "&About"
 
+    def execute(self):
+        wx.CallAfter(wx.GetApp().show_about_dialog)
+
 class document_list(ActionBase):
     def calc_name(self, action_key):
         return action_key.replace("_", " ").title()
@@ -463,7 +469,9 @@ class text_size(ActionBase):
         menu_item.SetItemLabel(name)
 
 
-class Editor:
+class SimpleEditor:
+    name = "simple_editor"
+
     menubar_desc = [
     ["File", ["New", "new_file"], "open_file", None, "save", "save_as", None, "quit"],
     ["Edit", "copy", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
@@ -515,16 +523,83 @@ class Editor:
         return action_factory(self)
 
 
-class DemoFrame(SimpleFrame):
-    """ This window displays a button """
-    def __init__(self, editor):
-        SimpleFrame.__init__(self, editor)
+class SimpleFrameworkApp(wx.App):
+    app_name = "Simple Framework"  # user visible application name
+
+    about_version = "1.0"
+
+    about_description = "Simple framework for wxPython applications"
+
+    about_website = "http://playermissile.com/omnivore"
+
+    about_image = "image_base_name"
+
+    default_editor = "simple_editor"
+
+    command_line_args = []
+
+    log_dir = ""
+
+    log_file_ext = ".log"
+
+    cache_dir = ""
+
+    user_data_dir = ""
+
+    next_document_id = 0
+
+    documents = []
+
+    clipboard_check_interval = .75
+
+    default_window_size = (800, 600)
+
+    last_window_size = None
+
+    def OnInit(self):
+        print("init!")
+        self.init_class_attrs()
+        return True
+
+    @classmethod
+    def init_class_attrs(cls):
+        """Initialize all application class attributes from default values.
+
+        This is called during the OnInit processing, before any configuration files
+        are read, in order to provide sane default in case configuration files don't
+        yet exist.
+        """
+        if cls.last_window_size is None:
+            cls.last_window_size = cls.default_window_size
+
+    @property
+    def about_image_bitmap(self):
+        return None
+
+    def show_about_dialog(self):
+        info = wx.adv.AboutDialogInfo()
+
+        # Load the image to be displayed in the about box.
+        #image = self.about_image.create_image()
+        icon = wx.Icon()
+        try:
+            icon.CopyFromBitmap(self.about_image_bitmap)
+            info.SetIcon(icon)
+        except:
+            log.error("AboutDialog: bad icon file: %s" % self.about_image)
+
+        info.SetName(self.app_name)
+        info.SetVersion(self.about_version)
+        info.SetDescription(self.about_description)
+        info.SetWebSite(self.about_website)
+
+        dialog = wx.adv.AboutBox(info)
 
 
 if __name__ == "__main__":
-    app = wx.App(False)
-    editor = Editor()
-    editor2 = Editor()
+    app = SimpleFrameworkApp(False)
+    editor = SimpleEditor()
+    editor2 = SimpleEditor()
     editor2.usable_actions = {
          "new_file": new_file,
          "open_file": open_file,
@@ -544,13 +619,13 @@ if __name__ == "__main__":
     "new_file", "open_file", "save", None, "text_last_digit",
     ]
     editor2.tab_name = "Editor 2"
-    editor3 = Editor()
+    editor3 = SimpleEditor()
     editor3.tab_name = "Editor 3"
-    editor4 = Editor()
+    editor4 = SimpleEditor()
     editor4.tab_name = "Editor 4"
-    editor5 = Editor()
+    editor5 = SimpleEditor()
     editor5.tab_name = "Editor 5"
-    frame = DemoFrame(editor)
+    frame = SimpleFrame(editor)
     frame.add_editor(editor2)
     frame.add_editor(editor3)
     frame.add_editor(editor4)
