@@ -140,7 +140,6 @@ class ToolbarDescription:
 
 
 class SimpleFrame(wx.Frame):
-    last_clipboard_check_time = 0.0
     clipboard_check_interval = 1.0
 
     def __init__(self, editor):
@@ -151,7 +150,10 @@ class SimpleFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_menu)
 
         self.raw_toolbar = self.CreateToolBar(wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_FLAT)
-        self.Bind(wx.EVT_IDLE, self.on_idle)
+
+        self.toolbar_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.on_timer)
+        self.Bind(wx.EVT_ACTIVATE, self.on_activate)
 
         if wx.Platform == "__WXMAC__":
             self.Bind(wx.EVT_MENU_OPEN, self.on_menu_open_mac)
@@ -283,16 +285,19 @@ class SimpleFrame(wx.Frame):
         del control
         evt.Skip()
 
-    def on_idle(self, evt):
+    def on_timer(self, evt):
         evt.Skip()
-        if not self.IsActive():
-            return
-        editor = self.active_editor
-        t = time.time()
-        if t > self.last_clipboard_check_time + self.clipboard_check_interval:
-            wx.CallAfter(self.sync_toolbar)
-            self.last_clipboard_check_time = time.time()
-            # FIXME: doesn't refresh toolbar until something moves...
+        print("timer")
+        wx.CallAfter(self.sync_toolbar)
+
+    def on_activate(self, evt):
+        if evt.GetActive():
+            print("restarting toolbar timer")
+            self.toolbar_timer.Start(self.clipboard_check_interval * 1000)
+        else:
+            print("halting toolbar timer")
+            self.toolbar_timer.Stop()
+        wx.CallAfter(self.sync_toolbar)
 
 class ActionBase:
     def __init__(self, editor):
