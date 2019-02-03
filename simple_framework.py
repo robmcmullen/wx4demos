@@ -28,6 +28,15 @@ global_action_ids = {
     "about": wx.ID_ABOUT,
     "quit": wx.ID_EXIT,
     "prefs": wx.ID_PREFERENCES,
+    "new_file": wx.ID_NEW,
+    "open_file": wx.ID_OPEN,
+    "save_file": wx.ID_SAVE,
+    "save_as": wx.ID_SAVEAS,
+    "copy": wx.ID_COPY,
+    "cut": wx.ID_CUT,
+    "paste": wx.ID_PASTE,
+    "undo": wx.ID_UNDO,
+    "redo": wx.ID_REDO,
 }
 
 
@@ -40,6 +49,26 @@ def get_action_id(action_key):
         id = wx.NewId()
         global_action_ids[action_key] = id
     return id
+
+
+global_art_ids = {
+    "quit": wx.ART_QUIT,
+    "new_file": wx.ART_NEW,
+    "open_file": wx.ART_FILE_OPEN,
+    "save_file": wx.ART_FILE_SAVE,
+    "save_as": wx.ART_FILE_SAVE_AS,
+    "copy": wx.ART_COPY,
+    "cut": wx.ART_CUT,
+    "paste": wx.ART_PASTE,
+    "undo": wx.ART_UNDO,
+    "redo": wx.ART_REDO,
+}
+
+
+def get_art_id(action_key):
+    global global_art_ids
+
+    return global_art_ids.get(action_key, wx.ART_QUESTION)
 
 
 class MenuDescription:
@@ -302,6 +331,7 @@ class SimpleFrame(wx.Frame):
             self.toolbar_timer.Stop()
         wx.CallAfter(self.sync_toolbar)
 
+
 class ActionBase:
     def __init__(self, editor):
         self.editor = editor
@@ -315,7 +345,8 @@ class ActionBase:
         tb.AddTool(id, name, self.calc_bitmap(action_key), wx.NullBitmap, wx.ITEM_NORMAL, name, f"Long help for '{name}'", None)
 
     def calc_bitmap(self, action_key):
-        return wx.ArtProvider.GetBitmap(wx.ART_FILE_OPEN, wx.ART_OTHER, self.editor.tool_bitmap_size)
+        art_id = get_art_id(action_key)
+        return wx.ArtProvider.GetBitmap(art_id, wx.ART_TOOLBAR, self.editor.tool_bitmap_size)
 
     def init_from_editor(self):
         pass
@@ -339,7 +370,7 @@ class new_file(ActionBase):
         return "&New"
 
     def execute(self):
-        new_editor = Editor()
+        new_editor = self.editor.__class__()
         wx.CallAfter(self.editor.attached_to_frame.add_editor, new_editor)
 
 class open_file(ActionBase):
@@ -351,7 +382,7 @@ class save(ActionBase):
         return "&Save"
 
     def sync_menu_item_from_editor(self, action_key, menu_item):
-        menu_item.Enable(not self.editor.control.IsEmpty())
+        menu_item.Enable(self.editor.is_dirty)
 
 class save_as(ActionBase):
     def calc_name(self, action_key):
@@ -364,15 +395,47 @@ class application_quit(ActionBase):
     def execute(self):
         self.editor.attached_to_frame.Destroy()
 
+class undo(ActionBase):
+    def calc_name(self, action_key):
+        return "&Undo"
+
+    def sync_menu_item_from_editor(self, action_key, menu_item):
+        menu_item.Enable(self.editor.can_undo)
+
+    def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
+        toolbar_control.EnableTool(id, self.editor.can_undo)
+
+class redo(ActionBase):
+    def calc_name(self, action_key):
+        return "&Redo"
+
+    def sync_menu_item_from_editor(self, action_key, menu_item):
+        menu_item.Enable(self.editor.can_redo)
+
+    def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
+        toolbar_control.EnableTool(id, self.editor.can_redo)
+
+class cut(ActionBase):
+    def calc_name(self, action_key):
+        return "&Cut"
+
+    def sync_menu_item_from_editor(self, action_key, menu_item):
+        menu_item.Enable(self.editor.can_copy)
+
+    def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
+        state = self.editor.can_copy
+        print(f"tool item {id}, {state}, {self.editor.tab_name}")
+        toolbar_control.EnableTool(id, state)
+
 class copy(ActionBase):
     def calc_name(self, action_key):
         return "&Copy"
 
     def sync_menu_item_from_editor(self, action_key, menu_item):
-        menu_item.Enable(self.editor.control.CanCopy())
+        menu_item.Enable(self.editor.can_copy)
 
     def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
-        state = self.editor.control.CanCopy()
+        state = self.editor.can_copy
         print(f"tool item {id}, {state}, {self.editor.tab_name}")
         toolbar_control.EnableTool(id, state)
 
@@ -381,11 +444,7 @@ class paste(ActionBase):
         return "&Paste"
 
     def sync_menu_item_from_editor(self, action_key, menu_item):
-        menu_item.Enable(self.editor.control.CanPaste())
-
-class paste_as_text(ActionBase):
-    def calc_name(self, action_key):
-        return "Paste As Text"
+        menu_item.Enable(self.editor.can_paste)
 
 class prefs(ActionBase):
     def calc_name(self, action_key):
@@ -398,91 +457,18 @@ class about(ActionBase):
     def execute(self):
         wx.CallAfter(wx.GetApp().show_about_dialog)
 
-class document_list(ActionBase):
-    def calc_name(self, action_key):
-        return action_key.replace("_", " ").title()
-
-    def calc_menu_sub_keys(self, action_key):
-        return ["document_list1", "document_list2", "document_list3"]
-
-class text_counting(ActionBase):
-    def init_from_editor(self):
-        self.counts = list(range(5, 25, 5))
-
-    def calc_name(self, action_key):
-        return action_key.replace("_", " ").title()
-
-    def calc_menu_sub_keys(self, action_key):
-        self.count_map = {f"text_count_{c}":c for c in self.counts}
-        return [f"text_count_{c}" for c in self.counts]
-
-    def sync_menu_item_from_editor(self, action_key, menu_item):
-        count = self.editor.control.GetLastPosition()
-        menu_item.Enable(count >= self.count_map[action_key])
-
-class text_last_digit(ActionBaseRadioMixin, ActionBase):
-    def calc_name(self, action_key):
-        return action_key.replace("_", " ").title()
-
-    def calc_menu_sub_keys(self, action_key):
-        self.count_map = {f"text_last_digit_{c}":c for c in range(10)}
-        return [f"text_last_digit_{c}" for c in range(10)]
-
-    def sync_menu_item_from_editor(self, action_key, menu_item):
-        count = self.editor.control.GetLastPosition()
-        divisor = self.count_map[action_key]
-        menu_item.Check(count % 10 == divisor)
-
-    calc_tool_sub_keys = calc_menu_sub_keys
-
-    def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
-        count = self.editor.control.GetLastPosition()
-        divisor = self.count_map[action_key]
-        toolbar_control.ToggleTool(id, count % 10 == divisor)
-
-class text_last_digit_dyn(ActionBase):
-    def init_from_editor(self):
-        self.count = (self.editor.control.GetLastPosition() % 10) + 1
-
-    def calc_name(self, action_key):
-        return action_key.replace("_", " ").title()
-
-    def calc_menu_sub_keys(self, action_key):
-        self.count_map = {f"text_last_digit_dyn{c}":c for c in range(self.count)}
-        return [f"text_last_digit_dyn{c}" for c in range(self.count)]
-
-    def sync_menu_item_from_editor(self, action_key, menu_item):
-        count = (self.editor.control.GetLastPosition() % 10) + 1
-        if count != self.count:
-            raise RecreateDynamicMenuBar
-
-class text_size(ActionBase):
-    def init_from_editor(self):
-        self.counts = list(range(5, 25, 5))
-
-    def calc_name(self, action_key):
-        size = self.editor.control.GetLastPosition()
-        return f"Text Size: {size}"
-
-    def sync_menu_item_from_editor(self, action_key, menu_item):
-        name = self.calc_name(action_key)
-        menu_item.SetItemLabel(name)
-
 
 class SimpleEditor:
     name = "simple_editor"
 
     menubar_desc = [
-    ["File", ["New", "new_file"], "open_file", None, "save", "save_as", None, "quit"],
-    ["Edit", "copy", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
-    ["Text", "text_counting", None, "text_last_digit", None, "text_size"],
-    ["Dynamic", "text_last_digit_dyn"],
-    ["Document", "document_list"],
+    ["File", "new_file", "open_file", None, "save", "save_as", None, "quit"],
+    ["Edit", "undo", "redo", None, "copy", "cut", "paste", None, "prefs"],
     ["Help", "about"],
     ]
 
     toolbar_desc = [
-    "new_file", "open_file", "save", None, "copy", "paste", "paste_as_text", "paste_as_hex",
+        "new_file", "open_file", "save", None, "undo", "redo", None, "copy", "cut", "paste"
     ]
 
     usable_actions = {
@@ -491,19 +477,36 @@ class SimpleEditor:
          "save": save,
          "save_as": save_as,
          "quit": application_quit,
+         "undo": undo,
+         "redo": redo,
+         "cut": cut,
          "copy": copy,
          "paste": paste,
-         "paste_as_text": paste_as_text,
          "prefs": prefs,
          "about": about,
-         "document_list": document_list,
-         "text_counting": text_counting,
-         "text_last_digit": text_last_digit,
-         "text_last_digit_dyn": text_last_digit_dyn,
-         "text_size": text_size,
     }
 
     tool_bitmap_size = (24, 24)
+
+    @property
+    def is_dirty(self):
+        return not self.control.IsEmpty()
+
+    @property
+    def can_copy(self):
+        return self.control.CanCopy()
+
+    @property
+    def can_paste(self):
+        return self.control.CanPaste()
+
+    @property
+    def can_undo(self):
+        return False
+
+    @property
+    def can_redo(self):
+        return False
 
     def __init__(self):
         self.title = "Sample Editor"
@@ -597,9 +600,122 @@ class SimpleFrameworkApp(wx.App):
 
 
 if __name__ == "__main__":
+    class paste_as_text(ActionBase):
+        def calc_name(self, action_key):
+            return "Paste As Text"
+
+    class document_list(ActionBase):
+        def calc_name(self, action_key):
+            return action_key.replace("_", " ").title()
+
+        def calc_menu_sub_keys(self, action_key):
+            return ["document_list1", "document_list2", "document_list3"]
+
+    class text_counting(ActionBase):
+        def init_from_editor(self):
+            self.counts = list(range(5, 25, 5))
+
+        def calc_name(self, action_key):
+            return action_key.replace("_", " ").title()
+
+        def calc_menu_sub_keys(self, action_key):
+            self.count_map = {f"text_count_{c}":c for c in self.counts}
+            return [f"text_count_{c}" for c in self.counts]
+
+        def sync_menu_item_from_editor(self, action_key, menu_item):
+            count = self.editor.control.GetLastPosition()
+            menu_item.Enable(count >= self.count_map[action_key])
+
+    class text_last_digit(ActionBaseRadioMixin, ActionBase):
+        def calc_name(self, action_key):
+            return action_key.replace("_", " ").title()
+
+        def calc_menu_sub_keys(self, action_key):
+            self.count_map = {f"text_last_digit_{c}":c for c in range(10)}
+            return [f"text_last_digit_{c}" for c in range(10)]
+
+        def sync_menu_item_from_editor(self, action_key, menu_item):
+            count = self.editor.control.GetLastPosition()
+            divisor = self.count_map[action_key]
+            menu_item.Check(count % 10 == divisor)
+
+        calc_tool_sub_keys = calc_menu_sub_keys
+
+        def sync_tool_item_from_editor(self, action_key, toolbar_control, id):
+            count = self.editor.control.GetLastPosition()
+            divisor = self.count_map[action_key]
+            toolbar_control.ToggleTool(id, count % 10 == divisor)
+
+    class text_last_digit_dyn(ActionBase):
+        def init_from_editor(self):
+            self.count = (self.editor.control.GetLastPosition() % 10) + 1
+
+        def calc_name(self, action_key):
+            return action_key.replace("_", " ").title()
+
+        def calc_menu_sub_keys(self, action_key):
+            self.count_map = {f"text_last_digit_dyn{c}":c for c in range(self.count)}
+            return [f"text_last_digit_dyn{c}" for c in range(self.count)]
+
+        def sync_menu_item_from_editor(self, action_key, menu_item):
+            count = (self.editor.control.GetLastPosition() % 10) + 1
+            if count != self.count:
+                raise RecreateDynamicMenuBar
+
+    class text_size(ActionBase):
+        def init_from_editor(self):
+            self.counts = list(range(5, 25, 5))
+
+        def calc_name(self, action_key):
+            size = self.editor.control.GetLastPosition()
+            return f"Text Size: {size}"
+
+        def sync_menu_item_from_editor(self, action_key, menu_item):
+            name = self.calc_name(action_key)
+            menu_item.SetItemLabel(name)
+
+    class DemoEditor(SimpleEditor):
+        name = "demo_editor"
+
+        menubar_desc = [
+        ["File", ["New", "new_file"], "open_file", None, "save", "save_as", None, "quit"],
+        ["Edit", "undo", "redo", None, "copy", "cut", "paste", "paste_rectangular", ["Paste Special", "paste_as_text", "paste_as_hex"], None, "prefs"],
+        ["Text", "text_counting", None, "text_last_digit", None, "text_size"],
+        ["Dynamic", "text_last_digit_dyn"],
+        ["Document", "document_list"],
+        ["Help", "about"],
+        ]
+
+        toolbar_desc = [
+        "new_file", "open_file", "save", None, "undo", "redo", None, "copy", "cut", "paste", "paste_as_text", "paste_as_hex",
+        ]
+
+        usable_actions = {
+             "new_file": new_file,
+             "open_file": open_file,
+             "save": save,
+             "save_as": save_as,
+             "quit": application_quit,
+             "undo": undo,
+             "redo": redo,
+             "cut": cut,
+             "copy": copy,
+             "paste": paste,
+             "paste_as_text": paste_as_text,
+             "prefs": prefs,
+             "about": about,
+             "document_list": document_list,
+             "text_counting": text_counting,
+             "text_last_digit": text_last_digit,
+             "text_last_digit_dyn": text_last_digit_dyn,
+             "text_size": text_size,
+        }
+
+
     app = SimpleFrameworkApp(False)
     editor = SimpleEditor()
-    editor2 = SimpleEditor()
+    editor1 = DemoEditor()
+    editor2 = DemoEditor()
     editor2.usable_actions = {
          "new_file": new_file,
          "open_file": open_file,
@@ -607,6 +723,7 @@ if __name__ == "__main__":
          "save_as": save_as,
          "quit": application_quit,
          "copy": copy,
+         "cut": cut,
          "paste": paste,
          "prefs": prefs,
          "about": about,
@@ -619,16 +736,11 @@ if __name__ == "__main__":
     "new_file", "open_file", "save", None, "text_last_digit",
     ]
     editor2.tab_name = "Editor 2"
-    editor3 = SimpleEditor()
+    editor3 = DemoEditor()
     editor3.tab_name = "Editor 3"
-    editor4 = SimpleEditor()
-    editor4.tab_name = "Editor 4"
-    editor5 = SimpleEditor()
-    editor5.tab_name = "Editor 5"
     frame = SimpleFrame(editor)
+    frame.add_editor(editor1)
     frame.add_editor(editor2)
     frame.add_editor(editor3)
-    frame.add_editor(editor4)
-    frame.add_editor(editor5)
     frame.Show()
     app.MainLoop()
