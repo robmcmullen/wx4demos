@@ -219,6 +219,7 @@ class SimpleFrame(wx.Frame):
     def create_toolbar(self):
         print(f"create_toolbar: active editor={self.active_editor}")
         self.toolbar = ToolbarDescription(self, self.active_editor)
+        self.raw_toolbar.Realize()
 
     def sync_toolbar(self):
         try:
