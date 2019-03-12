@@ -1,6 +1,8 @@
 import wx
 import wx.lib.scrolledpanel as scrolled
 
+import numpy as np
+
 
 class SizeReportCtrl(wx.Control):
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
@@ -41,6 +43,37 @@ class SizeReportCtrl(wx.Control):
         self.Refresh()
 
 
+class NumpyImagePanel(wx.Panel):
+    """ 
+    A very simple panel for displaying a wx.Image
+    """
+    def __init__(self, *args, **kwargs):
+        wx.Panel.__init__(self, *args, **kwargs)
+
+        self.w, self.h = self.GetClientSize()
+        self.bitmap = None
+
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_ERASE_BACKGROUND, self.on_erase_background)
+
+    def on_paint(self, event):
+        print("paint:", self.GetId(), self.GetClientSize())
+        w, h = self.GetClientSize()
+        if self.bitmap is None or (w, h) != (self.w, self.h):
+            self.rebuild_bitmap()
+        wx.BufferedPaintDC(self, self.bitmap)
+
+    def on_erase_background(self, event):
+        pass
+
+    def rebuild_bitmap(self):
+        print("rebuild_bitmap", self.GetId(), self.GetClientSize())
+        array = np.zeros((self.h, self.w, 3), dtype=np.uint8)
+        array[:,:,0] = 128
+        image = wx.ImageFromBuffer(self.w, self.h, array)
+        self.bitmap = wx.BitmapFromImage(image)
+
+
 class ScrolledWrapPanel(scrolled.ScrolledPanel):
     def __init__(self, parent):
         scrolled.ScrolledPanel.__init__(self, parent, -1)
@@ -48,6 +81,8 @@ class ScrolledWrapPanel(scrolled.ScrolledPanel):
         wsizer = wx.WrapSizer(orient=wx.HORIZONTAL)
         for i in range(1000):
             btn = SizeReportCtrl(self, -1, size=(200,100))
+            wsizer.Add(btn, 0, wx.ALL, 4)
+            btn = NumpyImagePanel(self, -1, size=(200,100))
             wsizer.Add(btn, 0, wx.ALL, 4)
 
         self.SetSizer(wsizer)
