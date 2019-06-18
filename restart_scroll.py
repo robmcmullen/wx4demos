@@ -4,45 +4,47 @@ import wx
 
 import numpy as np
 
-# There are two different approaches to drawing, buffered or direct.
-# This sample shows both approaches so you can easily compare and
-# contrast the two by changing this value.
-BUFFERED = 0
 
-#---------------------------------------------------------------------------
-
-class ZoomScroll(wx.ScrolledWindow):
+class RestartScroll(wx.ScrolledWindow):
     def __init__(self, parent, lines):
         wx.ScrolledWindow.__init__(self, parent, -1)
 
         self.restart_lines = lines
         self.width_border = 10
         self.height_border = 10
-        self.x_scale = 10
-        self.level_height = 100
+        self.x_scale = 1
+        self.level_height = 10
         self.line_width = 3
         self.x_hit = 5
-        self.y_hit = self.level_height // 2
+        self.y_hit = 5
+        self.over_line = None
         self.max_width = lines.last_frame * self.width_border + 2 * self.x_scale
         self.max_height = self.level_height * lines.highest_level + 2 * self.height_border
 
         self.SetBackgroundColour("WHITE")
 
         self.SetVirtualSize((self.max_width, self.max_height))
+        self.virtual_width = self.max_width
+        self.virtual_height = self.max_height
         self.SetScrollRate(20,20)
 
         self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_MOTION, self.on_motion)
+
+    def on_size(self, event):
+        size = self.GetVirtualSize()
+        self.virtual_width = size.x
+        self.virtual_height = size.y
 
     def on_paint(self, event):
         dc = wx.PaintDC(self)
-        size = self.GetVirtualSize()
         x_origin = self.width_border
         y_origin = self.height_border
 
         vbX, vbY = self.GetViewStart()
         posX, posY = self.CalcUnscrolledPosition (0, 0)
-        s = "Size: %d x %d"%(size.x, size.y)
+        s = "Size: %d x %d"%(self.virtual_width, self.virtual_height)
         upd = wx.RegionIterator(self.GetUpdateRegion())  # get the update rect list
         r = []
         while upd.HaveRects():
@@ -52,7 +54,7 @@ class ZoomScroll(wx.ScrolledWindow):
             #PaintRectangle(rect, dc)
             r.append("rect: %s" % str(rect))
             upd.Next()
-        print(s, (posX, posY), (vbX, vbY), " ".join(r))
+        print("on_paint", s, (posX, posY), (vbX, vbY), " ".join(r))
         dc.SetLogicalOrigin(posX, posY)
 
         dc.SetFont(wx.NORMAL_FONT)
@@ -60,36 +62,65 @@ class ZoomScroll(wx.ScrolledWindow):
         height += 3
         dc.SetBrush(wx.WHITE_BRUSH)
         dc.SetPen(wx.WHITE_PEN)
-        dc.DrawRectangle(0, 0, size.x, size.y)
+        dc.DrawRectangle(0, 0, self.virtual_width, self.virtual_height)
         dc.SetPen(wx.LIGHT_GREY_PEN)
-        dc.DrawLine(0, 0, size.x, size.y)
-        dc.DrawLine(0, size.y, size.x, 0)
-        dc.DrawText(s, (size.x-w)/2, (size.y-height*5)/2)
+        dc.DrawLine(0, 0, self.virtual_width, self.virtual_height)
+        dc.DrawLine(0, self.virtual_height, self.virtual_width, 0)
+        dc.DrawText(s, (self.virtual_width-w)/2, (self.virtual_height-height*5)/2)
 
         pen = wx.Pen(wx.BLUE, self.line_width)
+        hover_pen = wx.Pen(wx.BLUE, self.line_width * 2 + 1)
         dc.SetPen(pen)
         for line in self.restart_lines:
-            x1 = self.width_border + (self.x_scale * line.start_frame)
-            x2 = self.width_border + (self.x_scale * line.end_frame)
-            y = size.y - (y_origin + line.level * self.level_height)
-            dc.DrawLine(x1, y, x2, y)
+            x1 = self.frame_to_x(line.start_frame)
+            x2 = self.frame_to_x(line.end_frame)
+            y = self.level_to_y(line.level)
+            if line == self.over_line:
+                dc.SetPen(hover_pen)
+                dc.DrawLine(x1, y, x2, y)
+            else:
+                dc.SetPen(pen)
+                dc.DrawLine(x1, y, x2, y)
 
             if line.restart_number == 0:
                 continue
             parent_line = self.restart_lines[line.parent]
-            parent_y = size.y - (y_origin + parent_line.level * self.level_height)
+            parent_y = self.level_to_y(parent_line.level)
+            dc.SetPen(pen)
             dc.DrawLine(x1, y, x1, parent_y)
 
-    def on_motion(self, evt):
-        x, y = evt.GetX(), evt.GetY()
-        sx, sy = self.GetViewStart()
-        ux, uy = self.CalcUnscrolledPosition (x, y)
-        size = self.GetVirtualSize()
-        print(x, sx, ux)
+    def frame_to_x(self, frame_number):
+        return self.width_border + (self.x_scale * frame_number)
 
-        frame_number = (ux - self.width_border + self.x_scale // 2) // self.x_scale
-        level = ((size.y - uy) - self.height_border + self.level_height // 2) // self.level_height
-        print(frame_number, level)
+    def level_to_y(self, level):
+        return self.virtual_height - (self.height_border + level * self.level_height)
+
+    def on_motion(self, evt):
+        ex, ey = evt.GetX(), evt.GetY()
+        sx, sy = self.GetViewStart()
+        x, y = self.CalcUnscrolledPosition (ex, ey)
+        size = self.GetVirtualSize()
+        print(ex, sx, x)
+
+        frame_number = (x - self.width_border + self.x_scale // 2) // self.x_scale
+        level = ((self.virtual_height - y) - self.height_border + self.level_height // 2) // self.level_height
+        x1 = self.frame_to_x(frame_number)
+        y1 = self.level_to_y(level)
+        # print(x, x1, y, y1, frame_number, level)
+        old_over_line = self.over_line
+        over_line = None
+        if abs(y1 - y) < self.y_hit:
+            # print(frame_number, level)
+            line = self.restart_lines.find_line(frame_number, level)
+            if line:
+                print(f"over line {line}")
+                over_line = line
+            else:
+                print(f"not over any line")
+        if old_over_line != over_line:
+            print("REFRESHING")
+            self.over_line = over_line
+            wx.CallAfter(self.Refresh)
 
 
 
@@ -179,11 +210,18 @@ class RestartLines:
             #print(level)
             print("generate", line, line.level)
 
+    def find_line(self, frame_number, level):
+        for line in self.lines:
+            if frame_number >= line.start_frame and frame_number <= line.end_frame and level == line.level:
+                return line
+        return None
+
+
 
 #For testing 
 if __name__ == '__main__':
     app = wx.App()
-    frame = wx.Frame(None, -1, "Test ZoomScroll", size=(500,400))
+    frame = wx.Frame(None, -1, "Test RestartScroll", size=(500,400))
 
     from pprint import pprint
 
@@ -205,6 +243,6 @@ if __name__ == '__main__':
     print("restart_lines", lines)
 
 
-    scroll = ZoomScroll(frame, lines)
+    scroll = RestartScroll(frame, lines)
     frame.Show() 
     app.MainLoop()
