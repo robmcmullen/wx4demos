@@ -15,13 +15,19 @@ class RestartScroll(wx.ScrolledWindow):
         self.x_scale = 1
         self.level_height = 10
         self.line_width = 3
+        self.marker_size = 3
         self.x_hit = 5
         self.y_hit = 5
         self.over_line = None
         self.max_width = lines.last_frame * self.width_border + 2 * self.x_scale
         self.max_height = self.level_height * lines.highest_level + 2 * self.height_border
 
-        self.SetBackgroundColour("WHITE")
+        self.bg_color = wx.WHITE
+        self.line_color = wx.BLUE
+        self.marker_color = wx.Colour(255, 0, 255)
+        self.create_dc_stuff()
+
+        self.SetBackgroundColour(self.bg_color)
 
         self.SetVirtualSize((self.max_width, self.max_height))
         self.virtual_width = self.max_width
@@ -31,6 +37,12 @@ class RestartScroll(wx.ScrolledWindow):
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_MOTION, self.on_motion)
+
+    def create_dc_stuff(self):
+        self.pen = wx.Pen(self.line_color, self.line_width)
+        self.hover_pen = wx.Pen(self.line_color, self.line_width * 2 + 1)
+        self.marker_brush = wx.Brush(self.marker_color)
+        self.marker_pen = wx.Pen(self.line_color, 1)
 
     def on_size(self, event):
         size = self.GetVirtualSize()
@@ -68,25 +80,30 @@ class RestartScroll(wx.ScrolledWindow):
         dc.DrawLine(0, self.virtual_height, self.virtual_width, 0)
         dc.DrawText(s, (self.virtual_width-w)/2, (self.virtual_height-height*5)/2)
 
-        pen = wx.Pen(wx.BLUE, self.line_width)
-        hover_pen = wx.Pen(wx.BLUE, self.line_width * 2 + 1)
-        dc.SetPen(pen)
+        dc.SetPen(self.pen)
         for line in self.restart_lines:
             x1 = self.frame_to_x(line.start_frame)
             x2 = self.frame_to_x(line.end_frame)
             y = self.level_to_y(line.level)
             if line == self.over_line:
-                dc.SetPen(hover_pen)
+                dc.SetPen(self.hover_pen)
                 dc.DrawLine(x1, y, x2, y)
             else:
-                dc.SetPen(pen)
+                dc.SetPen(self.pen)
                 dc.DrawLine(x1, y, x2, y)
+            dc.SetPen(self.marker_pen)
+            dc.SetBrush(self.marker_brush)
+            for interesting_frame in line.interesting_frames.keys():
+                xi = self.frame_to_x(interesting_frame)
+                dc.DrawCircle(xi, y, self.marker_size)
 
             if line.restart_number == 0:
                 continue
+
+            # draw vertical line connecting to parent restart
             parent_line = self.restart_lines[line.parent]
             parent_y = self.level_to_y(parent_line.level)
-            dc.SetPen(pen)
+            dc.SetPen(self.pen)
             dc.DrawLine(x1, y, x1, parent_y)
 
     def frame_to_x(self, frame_number):
@@ -176,6 +193,10 @@ class RestartLine:
         current_largest_level = max(level[self.start_frame:self.end_frame + 1])
         self.level = current_largest_level + 1
         level[self.start_frame:self.end_frame + 1] = self.level
+        self.interesting_frames = {
+            self.start_frame: "Restart from run {self.parent}",
+            self.end_frame: "Last frame",
+        }
 
     def __repr__(self):
         return f"{self.restart_number}: {self.start_frame}->{self.end_frame} @ {self.level}"
